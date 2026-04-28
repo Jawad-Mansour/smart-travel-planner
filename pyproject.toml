@@ -36,6 +36,8 @@ dependencies = [
     "structlog>=24.4.0",
     "click>=8.1.0",
     "tiktoken>=0.7.0",
+    "matplotlib>=3.10.9",
+    "seaborn>=0.13.2",
 ]
 
 [project.optional-dependencies]
