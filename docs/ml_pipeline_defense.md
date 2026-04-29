@@ -57,7 +57,7 @@ DUPLICATE PAIRS (6 pairs, 12 rows):
 - Santiago (DST-0080 / DST-0081) - both Culture
 - Montevideo (DST-0082 / DST-0083) - both Culture
 
-DEFENSE: 
+DEFENSE:
 The dataset was manually compiled to ensure:
 1. Each destination has realistic, verifiable feature values based on real data
 2. The labeling rules (Section 4) produce consistent, defensible travel_style labels
