@@ -3,7 +3,7 @@
                     Smart Travel Planner
 ================================================================================
 
-DATE: April 28, 2026
+DATE: April 29, 2026
 STATUS: FINAL - APPROVED
 
 
@@ -11,7 +11,7 @@ STATUS: FINAL - APPROVED
 SECTION 1: COMPLETE FEATURE SUMMARY
 ================================================================================
 
-TOTAL CSV COLUMNS: 38
+TOTAL CSV COLUMNS: 35
 ML FEATURES (used in training): 24
 IDENTIFIERS (dropped before training): 4
 FUTURE USE (agent only, not in ML): 6
@@ -19,74 +19,21 @@ TARGET: 1
 
 COLUMN BREAKDOWN:
 - Identifiers (4): destination_id, destination_city, country, source_label_hint
-- ML Features (24): 3 climate + 3 cost + 3 culture + 11 scores + 2 binary + 2 other
+- ML Features (24): 2 climate + 3 cost + 3 culture + 11 scores + 2 binary + 3 other
 - Future Use (6): best_season, visa_requirement, english_friendly_score, public_transport_score, latitude, longitude
 - Target (1): travel_style
 
-VERIFICATION: 4 + 24 + 6 + 1 = 35? WAIT - This doesn't add up to 38.
-Let me recount the CSV header:
+VERIFICATION: 4 + 24 + 6 + 1 = 35 ✓
 
-CSV HEADER (38 columns):
-1.destination_id
-2.destination_city
-3.country
-4.region
-5.avg_annual_temp_c
-6.seasonal_range_c
-7.dry_season_months
-8.cost_per_day_avg_usd
-9.meal_budget_usd
-10.hotel_night_avg_usd
-11.flight_cost_usd
-12.museum_count
-13.monument_count
-14.festival_score
-15.beach_score
-16.scenic_score
-17.wellness_score
-18.culture_score
-19.hiking_score
-20.nightlife_score
-21.family_score
-22.luxury_score
-23.safety_score
-24.tourist_density_score
-25.adventure_sports_score
-26.near_mountains
-27.near_beach
-28.best_season
-29.visa_requirement
-30.english_friendly_score
-31.public_transport_score
-32.latitude
-33.longitude
-34.source_label_hint
-35.travel_style
-
-COUNT: 35 columns, not 38.
-
-CORRECTION: Total CSV columns = 35, not 38.
-- Identifiers: destination_id, destination_city, country, source_label_hint = 4
-- Region: region = 1 (categorical, part of ML features)
-- ML Features: 24 (includes region, excludes dry_season_months? Let me recalc)
-
-Let me recalc ML Features (24):
-Climate (2): avg_annual_temp_c, seasonal_range_c
-Cost (3): cost_per_day_avg_usd, meal_budget_usd, hotel_night_avg_usd
-Culture (3): museum_count, monument_count, festival_score
-Scores (11): beach_score, scenic_score, wellness_score, culture_score, hiking_score, nightlife_score, family_score, luxury_score, safety_score, tourist_density_score, adventure_sports_score
-Binary (2): near_mountains, near_beach
-Other (3): region, flight_cost_usd, dry_season_months
+ML Features breakdown (24):
+- Climate (2): avg_annual_temp_c, seasonal_range_c
+- Cost (3): cost_per_day_avg_usd, meal_budget_usd, hotel_night_avg_usd
+- Culture (3): museum_count, monument_count, festival_score
+- Scores (11): beach_score, scenic_score, wellness_score, culture_score, hiking_score, nightlife_score, family_score, luxury_score, safety_score, tourist_density_score, adventure_sports_score
+- Binary (2): near_mountains, near_beach
+- Other (3): region, flight_cost_usd, dry_season_months
 
 2+3+3+11+2+3 = 24 ✓
-
-Future Use (6): best_season, visa_requirement, english_friendly_score, public_transport_score, latitude, longitude
-Target (1): travel_style
-Identifiers (4): destination_id, destination_city, country, source_label_hint
-
-Total: 4 + 24 + 6 + 1 = 35 ✓
-
-All documents updated to reflect 35 TOTAL COLUMNS.
 
 
 ================================================================================
@@ -274,11 +221,14 @@ CSV for the agent to use when answering specific user questions.
 SECTION 11: MISSING VALUE HANDLING (IN PIPELINE - NOT MANUAL)
 ================================================================================
 
-IMPORTANT: Missing values are NOT manually imputed.
+IMPORTANT: Missing values are NOT manually imputed during training preprocessing.
 
 WHY: Manual imputation before train/test split causes data leakage.
 
-PIPELINE STRATEGY:
+The ONE known missing value (DST-0139 seasonal_range_c) is fixed during
+Notebook 02 cleaning BEFORE the SMOTE step, and this is documented.
+
+PIPELINE STRATEGY (for any new missing values at inference):
 - Numerical features: SimpleImputer(strategy='median')
 - Binary features: SimpleImputer(strategy='most_frequent')
 - Categorical features: SimpleImputer(strategy='constant', fill_value='missing')
@@ -341,7 +291,7 @@ SECTION 13: FEATURE COUNT SUMMARY
 | TOTAL CSV COLUMNS            | 35       |
 +------------------------------+----------+
 
-ML FEATURES (used in training): 4+24? No - ML features are 24.
+ML FEATURES (used in training): 24
 Breakdown: 2+3+3+11+2+3 = 24 features
 
 

@@ -1,154 +1,202 @@
 ================================================================================
-                    ML CLASSIFIER - DATA CLEANING PLAN
+                    ML CLASSIFIER - DATA CLEANING + AUGMENTATION PLAN
                     Smart Travel Planner
 ================================================================================
 
-DATE: April 28, 2026
-STATUS: FINAL - APPROVED
+DATE: April 29, 2026
+STATUS: FINAL - APPROVED (Aligned with 4-Notebook Pipeline)
 
 
 ================================================================================
-SECTION 1: RAW DATA ISSUES (INTENTIONAL)
+SECTION 1: RAW DATA ISSUES (TO BE DETECTED IN NOTEBOOK 01 - EDA)
 ================================================================================
 
-The raw CSV will contain these issues to demonstrate cleaning skills:
+The raw CSV (155 data rows) contains intentional and discovered issues to
+demonstrate data engineering and cleaning skills:
 
-+-------------------------+----------+------------------------------------------+
-| ISSUE TYPE              | COUNT    | EXAMPLE                                  |
-+-------------------------+----------+------------------------------------------+
-| Missing values          | 1 cell   | seasonal_range_c = NULL (DST-0139)       |
-+-------------------------+----------+------------------------------------------+
-| Duplicate rows          | 6 rows   | DST-0008, DST-0019, DST-0139 (3 pairs)   |
-+-------------------------+----------+------------------------------------------+
-| Outliers                | 2 rows   | hotel_night_avg_usd >= 250 (Luxury)      |
-+-------------------------+----------+------------------------------------------+
-| Appended text in hints  | 14 cells | ",Budget" or ",Culture" in source_hint   |
-+-------------------------+----------+------------------------------------------+
++--------------------------+----------+-------------------------------------+
+| ISSUE TYPE               | COUNT    | EXAMPLE                             |
++--------------------------+----------+-------------------------------------+
+| Missing values           | 1 cell   | seasonal_range_c is NaN for         |
+|                          |          | DST-0139 (Entebbe).                 |
++--------------------------+----------+-------------------------------------+
+| Duplicate rows           | 6 pairs  | Sydney (DST-0016 / DST-0075),       |
+|                          |          | Cape Town (DST-0041 / DST-0076),    |
+|                          |          | Nairobi (DST-0077 / DST-0078),      |
+|                          |          | Maldives (DST-0042 / DST-0079),     |
+|                          |          | Santiago (DST-0080 / DST-0081),     |
+|                          |          | Montevideo (DST-0082 / DST-0083).   |
++--------------------------+----------+-------------------------------------+
+| Whitespace in strings    | varies   | Leading/trailing spaces in city,    |
+|                          |          | country, source_label_hint columns. |
++--------------------------+----------+-------------------------------------+
+| Class imbalance          | severe   | Adventure (46) / Culture (35)       |
+|                          |          | dominate; Luxury (8) / Family (12)  |
+|                          |          | are rare.                           |
++--------------------------+----------+-------------------------------------+
 
-RAW ROWS: 155
-AFTER CLEANING: 149 rows (155 - 6 duplicates)
+NOTE: There are NO structural defects (extra columns) in this dataset.
+All 155 rows have exactly 35 fields matching the header. This was an
+intentional decision to simplify the cleaning pipeline.
+
+NOTE: There are NO appended text suffixes (",Budget", ",Culture") in
+source_label_hint. This was removed per project decision.
 
 
 ================================================================================
-SECTION 2: CLEANING STEPS (BEFORE PIPELINE)
+SECTION 2: CLEANING + AUGMENTATION PIPELINE (NOTEBOOK 02)
 ================================================================================
 
-These steps run ONCE on the raw CSV before the scikit-learn pipeline.
+All cleaning and augmentation runs ONCE in Notebook 02. The output is the
+single source of truth for downstream notebooks (03, 04).
 
-STEP 1: LOAD RAW DATA
----------------------
-import pandas as pd
-df = pd.read_csv('backend/ml/data/destinations_raw.csv')
-
-STEP 2: REMOVE DUPLICATES
--------------------------
-# Remove by ID first (keeps first occurrence)
-df = df.drop_duplicates(subset=['destination_id'], keep='first')
-
-# Also check by city+country (in case IDs differ)
-df = df.drop_duplicates(subset=['destination_city', 'country'], keep='first')
-
-STEP 3: STRIP WHITESPACE
-------------------------
-string_columns = ['destination_id', 'destination_city', 'country', 'region',
-                  'best_season', 'visa_requirement', 'dry_season_months',
-                  'source_label_hint', 'travel_style']
-
-for col in string_columns:
-    if col in df.columns:
-        df[col] = df[col].str.strip()
-
-STEP 4: CLEAN SOURCE_LABEL_HINT (Remove appended labels)
----------------------------------------------------------
-# Remove ",Budget" and ",Culture" suffixes from source_label_hint
-df['source_label_hint'] = df['source_label_hint'].str.replace(',Budget', '', regex=False)
-df['source_label_hint'] = df['source_label_hint'].str.replace(',Culture', '', regex=False)
-df['source_label_hint'] = df['source_label_hint'].str.replace(',Budget', '', regex=False)
-
-STEP 5: STANDARDIZE SEASON FORMATS
-----------------------------------
-def standardize_months(text):
-    if pd.isna(text):
-        return text
-    month_map = {
-        'Jan': 'January', 'Feb': 'February', 'Mar': 'March',
-        'Apr': 'April', 'May': 'May', 'Jun': 'June',
-        'Jul': 'July', 'Aug': 'August', 'Sep': 'September',
-        'Oct': 'October', 'Nov': 'November', 'Dec': 'December'
-    }
-    for abbr, full in month_map.items():
-        text = text.replace(abbr, full)
-    return text
-
-df['dry_season_months'] = df['dry_season_months'].apply(standardize_months)
-df['best_season'] = df['best_season'].apply(standardize_months)
-
-STEP 6: HANDLE OUTLIERS (Cap at 99th percentile)
-------------------------------------------------
-for col in ['cost_per_day_avg_usd', 'hotel_night_avg_usd', 'meal_budget_usd']:
-    cap = df[col].quantile(0.99)
-    df[col] = df[col].clip(upper=cap)
-
-STEP 7: VERIFY CLEANING
+STEP 1 - LOAD RAW DATA
 -----------------------
-print(f"Rows after cleaning: {len(df)}")
-print(f"Missing values per column:\n{df.isnull().sum()}")
-print(f"Unique travel styles: {df['travel_style'].unique()}")
+- Read the CSV with pandas.read_csv(). No structural repair needed since
+  all 155 rows have the correct 35 fields.
+- Validate column count matches header (35 columns).
 
-STEP 8: SAVE CLEANED DATA
+STEP 2 - REMOVE DUPLICATE ROWS
+------------------------------
+- Drop duplicates by destination_id, keeping the first occurrence.
+- Drop duplicates by (destination_city, country) as a second pass to catch
+  cases where the same city appears with different IDs.
+- Expected result: 139 unique rows after deduplication.
+
+STEP 3 - FIX MISSING VALUES
+---------------------------
+- For seasonal_range_c (the single known missing cell at DST-0139), impute
+  with the median of the column. This is a one-off manual fix, not a pipeline
+  step, because there is only one such cell and the rule is documented.
+
+DEFENSE: Pipeline-level imputation is reserved for in-pipeline median/most-
+frequent/constant strategies that protect against future missing values during
+inference. The DST-0139 fix is one-off and documented.
+
+STEP 4 - STRIP WHITESPACE FROM STRING COLUMNS
+---------------------------------------------
+string_columns = [
+    "destination_id", "destination_city", "country", "region",
+    "best_season", "visa_requirement", "dry_season_months",
+    "source_label_hint", "travel_style"
+]
+df[col] = df[col].astype(str).str.strip()
+
+STEP 5 - VERIFY CLEANED DATA
+----------------------------
+- assert df.isnull().sum().sum() == 0
+- assert len(df) == len(df.drop_duplicates())
+- print final shape and class counts
+
+STEP 6 - SEPARATE X AND y
 -------------------------
-df.to_csv('backend/ml/data/destinations_clean.csv', index=False)
+y = df["travel_style"]
+X = df.drop(columns=["travel_style"])
+
+STEP 7 - APPLY SMOTE TO THE ENTIRE CLEANED DATASET
+--------------------------------------------------
+SMOTE requires a numeric matrix; categoricals must be encoded first or
+SMOTENC must be used. We use SMOTENC because the dataset has both numeric
+and categorical features.
+
+from imblearn.over_sampling import SMOTENC
+
+categorical_indices = [X.columns.get_loc(c) for c in [
+    "region", "dry_season_months", "best_season", "visa_requirement",
+    "destination_id", "destination_city", "country", "source_label_hint"
+]]
+
+smote = SMOTENC(
+    categorical_features=categorical_indices,
+    random_state=42,
+    k_neighbors=3  # smaller k for rare classes
+)
+X_aug, y_aug = smote.fit_resample(X, y)
+
+DEFENSE: SMOTENC is the right tool when the design matrix mixes numeric and
+categorical features. Plain SMOTE would corrupt categorical values.
+
+STEP 8 - VERIFY CLASS DISTRIBUTION
+----------------------------------
+- All classes should be approximately balanced (within +-5 samples).
+- Save experiments/class_distribution_augmented.csv.
+
+STEP 9 - SAVE AUGMENTED DATASET
+--------------------------------
+df_augmented = X_aug.copy()
+df_augmented["travel_style"] = y_aug
+df_augmented.to_csv("backend/ml/data/destinations_augmented.csv", index=False)
 
 
 ================================================================================
-SECTION 3: MISSING VALUE HANDLING (IN PIPELINE - NOT MANUAL)
+SECTION 3: WHY SMOTE BEFORE THE TRAIN/VAL/TEST SPLIT
 ================================================================================
 
-IMPORTANT: Missing values are NOT manually imputed.
+With only 139 unique rows and 6 classes, a stratified 60/20/20 split would
+leave the test set with roughly 1-2 Luxury samples, making per-class metrics
+meaningless. By augmenting BEFORE the split:
 
-WHY: Manual imputation before train/test split causes data leakage.
-The pipeline learns imputation statistics ONLY from training data.
+- Test set has enough samples per class for reliable macro F1.
+- Validation set has enough samples per class for tuning decisions.
+- Stratified splitting on the augmented data still preserves balance.
 
-PIPELINE STRATEGY (not manual):
-- Numerical features: SimpleImputer(strategy='median')
-- Binary features: SimpleImputer(strategy='most_frequent')
-- Categorical features: SimpleImputer(strategy='constant', fill_value='missing')
-
-DEFENSE:
-- 'median' for numerical: Robust to outliers, preserves distribution
-- 'most_frequent' for binary: Missing ≠ false, so use most common value
-- 'missing' for categorical: Explicitly indicates data was missing
-
-
-================================================================================
-SECTION 4: EXPECTED RESULTS AFTER CLEANING
-================================================================================
-
-+-------------------------+--------------+-------------------------------+
-| METRIC                  | RAW          | AFTER CLEANING                |
-+-------------------------+--------------+-------------------------------+
-| Total rows              | 155          | 149                           |
-+-------------------------+--------------+-------------------------------+
-| Duplicate rows          | 6            | 0                             |
-+-------------------------+--------------+-------------------------------+
-| Missing values          | 1 cell       | Same (handled in pipeline)    |
-+-------------------------+--------------+-------------------------------+
-| Appended text in hints  | 14 cells     | 0 (cleaned)                   |
-+-------------------------+--------------+-------------------------------+
+LIMITATION: SMOTE can leak structure across the split, slightly inflating
+test scores. We mitigate by:
+- Reporting per-class metrics (leakage shows as suspiciously high macro F1).
+- Running the test evaluation only ONCE at the end.
+- Using cross-validation on the training set (not the test set) for tuning.
 
 
 ================================================================================
-SECTION 5: CLEANING SCRIPT LOCATION
+SECTION 4: WHAT IS HANDLED IN THE PIPELINE (NOTEBOOK 02), NOT MANUALLY
 ================================================================================
 
-File: backend/ml/scripts/clean_data.py
+These transformations live inside the scikit-learn ColumnTransformer to
+avoid data leakage. They are FIT on TRAIN ONLY and TRANSFORM all splits.
 
-Run with:
-cd /c/projects/smart-travel-planner
-source .venv/Scripts/activate
-python backend/ml/scripts/clean_data.py
+NUMERICAL FEATURES   ->  SimpleImputer(strategy="median") -> StandardScaler
+BINARY FEATURES      ->  SimpleImputer(strategy="most_frequent")
+CATEGORICAL FEATURES ->  SimpleImputer(strategy="constant",
+                                       fill_value="missing")
+                         -> OneHotEncoder(handle_unknown="ignore")
 
 
 ================================================================================
-END OF CLEANING PLAN DOCUMENT
+SECTION 5: EXPECTED RESULTS AFTER NOTEBOOK 02
+================================================================================
+
++-------------------------------+----------+--------------------------+
+| METRIC                        | RAW      | AFTER NOTEBOOK 02        |
++-------------------------------+----------+--------------------------+
+| Total rows                    | 155      | ~270 (after SMOTE)       |
++-------------------------------+----------+--------------------------+
+| Duplicate rows                | 6 pairs  | 0                        |
++-------------------------------+----------+--------------------------+
+| Missing values                | 1 cell   | 0                        |
++-------------------------------+----------+--------------------------+
+| Whitespace defects            | minimal  | 0                        |
++-------------------------------+----------+--------------------------+
+| Smallest class size           | 8        | ~46 (post-SMOTENC)       |
+|                               | (Luxury) | (all classes equal)      |
++-------------------------------+----------+--------------------------+
+
+
+================================================================================
+SECTION 6: NOTEBOOK 02 INPUTS / OUTPUTS
+================================================================================
+
+INPUTS:
+- backend/ml/data/destinations_raw.csv
+
+OUTPUTS:
+- backend/ml/data/destinations_augmented.csv          (clean + balanced)
+- backend/ml/experiments/class_distribution_augmented.csv
+
+The dataset committed to git is destinations_raw.csv. The augmented file is
+regenerated deterministically from it (random_state=42), so it can be safely
+recreated by anyone running the notebook.
+
+
+================================================================================
+END OF CLEANING + AUGMENTATION PLAN DOCUMENT
 ================================================================================

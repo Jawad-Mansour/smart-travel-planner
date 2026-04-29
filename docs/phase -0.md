@@ -167,112 +167,112 @@ DEFENSE:
 SECTION 3: DEPENDENCY JUSTIFICATION TABLE
 ================================================================================
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ PACKAGE                │ VERSION   │ WHY NEEDED?                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ fastapi                │ 0.136.1   │ Async web framework with built-in DI  │
-│ uvicorn                │ 0.46.0    │ ASGI server (FastAPI requires)        │
-│ sqlalchemy             │ 2.0.49    │ Async ORM with Alembic migrations     │
-│ asyncpg                │ 0.31.0    │ Async PostgreSQL driver               │
-│ pgvector               │ 0.4.2     │ Vector similarity search in Postgres  │
-│ langgraph              │ 1.1.10    │ Agent state machine                   │
-│ langchain              │ 1.2.15    │ Tool calling and chains               │
-│ langsmith              │ 0.7.37    │ Agent tracing (spec requires)         │
-│ openai                 │ 2.32.0    │ GPT-4o and GPT-4o-mini                │
-│ anthropic              │ 0.97.0    │ Claude Haiku and Sonnet               │
-│ scikit-learn           │ 1.8.0     │ ML classifiers, Pipeline, CV          │
-│ pandas                 │ 3.0.2     │ Data loading and EDA                  │
-│ numpy                  │ 2.4.4     │ Numerical operations                  │
-│ xgboost                │ 3.2.0     │ Gradient boosting classifier         │
-│ joblib                 │ 1.5.3     │ Model serialization                   │
-│ httpx                  │ 0.28.1    │ Async HTTP client for APIs           │
-│ tenacity               │ 9.1.4     │ Retry logic with backoff             │
-│ cachetools             │ 7.0.6     │ TTL cache for API responses          │
-│ aiocache               │ 0.12.3    │ Async cache with TTL                 │
-│ pydantic               │ 2.13.3    │ Data validation (spec requires)      │
-│ pydantic-settings      │ 2.14.0    │ Type-safe config from .env           │
-│ python-dotenv          │ 1.2.2     │ Load .env files                      │
-│ structlog              │ 25.5.0    │ Structured JSON logging              │
-│ tiktoken               │ 0.12.0    │ Token counting for LLM costs         │
-│ pytest                 │ 9.0.3     │ Testing framework                    │
-│ pytest-asyncio         │ 1.3.0     │ Async test support                   │
-│ ruff                   │ 0.15.12   │ Linting (50x faster than Flake8)     │
-│ black                  │ 26.3.1    │ Code formatting (zero-config)        │
-│ mypy                   │ 1.20.2    │ Type checking                        │
-│ pre-commit             │ 4.6.0     │ Git hooks for code quality           │
-└─────────────────────────────────────────────────────────────────────────────┘
++------------------------+----------+---------------------------------------+
+| PACKAGE                | VERSION  | WHY NEEDED?                           |
++------------------------+----------+---------------------------------------+
+| fastapi                | 0.136.1  | Async web framework with built-in DI  |
+| uvicorn                | 0.46.0   | ASGI server (FastAPI requires)        |
+| sqlalchemy             | 2.0.49   | Async ORM with Alembic migrations     |
+| asyncpg                | 0.31.0   | Async PostgreSQL driver               |
+| pgvector               | 0.4.2    | Vector similarity search in Postgres  |
+| langgraph              | 1.1.10   | Agent state machine                   |
+| langchain              | 1.2.15   | Tool calling and chains               |
+| langsmith              | 0.7.37   | Agent tracing (spec requires)         |
+| openai                 | 2.32.0   | GPT-4o and GPT-4o-mini                |
+| anthropic              | 0.97.0   | Claude Haiku and Sonnet               |
+| scikit-learn           | 1.8.0    | ML classifiers, Pipeline, CV          |
+| pandas                 | 3.0.2    | Data loading and EDA                  |
+| numpy                  | 2.4.4    | Numerical operations                  |
+| xgboost                | 3.2.0    | Gradient boosting classifier          |
+| joblib                 | 1.5.3    | Model serialization                   |
+| httpx                  | 0.28.1   | Async HTTP client for APIs            |
+| tenacity               | 9.1.4    | Retry logic with backoff              |
+| cachetools             | 7.0.6    | TTL cache for API responses           |
+| aiocache               | 0.12.3   | Async cache with TTL                  |
+| pydantic               | 2.13.3   | Data validation (spec requires)       |
+| pydantic-settings      | 2.14.0   | Type-safe config from .env            |
+| python-dotenv          | 1.2.2    | Load .env files                       |
+| structlog              | 25.5.0   | Structured JSON logging               |
+| tiktoken               | 0.12.0   | Token counting for LLM costs          |
+| pytest                 | 9.0.3    | Testing framework                     |
+| pytest-asyncio         | 1.3.0    | Async test support                    |
+| ruff                   | 0.15.12  | Linting (50x faster than Flake8)      |
+| black                  | 26.3.1   | Code formatting (zero-config)         |
+| mypy                   | 1.20.2   | Type checking                         |
+| pre-commit             | 4.6.0    | Git hooks for code quality            |
++------------------------+----------+---------------------------------------+
 
 
 ================================================================================
 SECTION 4: FILES CREATED WITH DEFENSES
 ================================================================================
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ FILE                    │ CONTENT SUMMARY               │ DEFENSE           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ .env.example            │ All 40+ environment variables │ Documents secrets │
-│                         │ with placeholder values       │ without committing│
-│                         │                               │ them              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ .gitignore              │ Excludes .venv, .env, *.joblib│ Prevents commit of│
-│                         │ node_modules, __pycache__     │ large/binary files│
-├─────────────────────────────────────────────────────────────────────────────┤
-│ .pre-commit-config.yaml │ ruff lint + format hooks      │ Automated quality │
-│                         │ pre-commit-hooks (whitespace, │ before each commit│
-│                         │ end-of-file, YAML, large files)│                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ .python-version         │ "3.11"                        │ Pins Python for  │
-│                         │                               │ all developers    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ pyproject.toml          │ Dependencies + tools config   │ Single source of  │
-│                         │ (ruff, black, mypy, pytest)   │ truth             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ docker-compose.yml      │ postgres + backend + frontend │ One command start │
-│                         │ Named volume for persistence  │ All services      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 39 __init__.py files    │ Empty markers                 │ Makes directories │
-│                         │                               │ importable Python │
-│                         │                               │ packages          │
-└─────────────────────────────────────────────────────────────────────────────┘
++------------------------+---------------------------------+-------------------+
+| FILE                   | CONTENT SUMMARY                 | DEFENSE           |
++------------------------+---------------------------------+-------------------+
+| .env.example           | All 40+ environment variables   | Documents secrets |
+|                        | with placeholder values         | without committing|
+|                        |                                 | them              |
++------------------------+---------------------------------+-------------------+
+| .gitignore             | Excludes .venv, .env, *.joblib  | Prevents commit of|
+|                        | node_modules, __pycache__       | large/binary files|
++------------------------+---------------------------------+-------------------+
+| .pre-commit-config.yaml| ruff lint + format hooks        | Automated quality |
+|                        | pre-commit-hooks (whitespace,   | before each commit|
+|                        | end-of-file, YAML, large files) |                   |
++------------------------+---------------------------------+-------------------+
+| .python-version        | "3.11"                          | Pins Python for   |
+|                        |                                 | all developers    |
++------------------------+---------------------------------+-------------------+
+| pyproject.toml         | Dependencies + tools config     | Single source of  |
+|                        | (ruff, black, mypy, pytest)     | truth             |
++------------------------+---------------------------------+-------------------+
+| docker-compose.yml     | postgres + backend + frontend   | One command start |
+|                        | Named volume for persistence    | All services      |
++------------------------+---------------------------------+-------------------+
+| 39 __init__.py files   | Empty markers                   | Makes directories |
+|                        |                                 | importable Python |
+|                        |                                 | packages          |
++------------------------+---------------------------------+-------------------+
 
 
 ================================================================================
 SECTION 5: VERIFICATION - PHASE 0 REQUIREMENTS CHECKLIST
 ================================================================================
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ REQUIREMENT            │ STATUS    │ EVIDENCE                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ GitHub repo created    │ ✅        │ https://github.com/Jawad-Mansour/      │
-│                        │           │ smart-travel-planner                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ UV initialized         │ ✅        │ pyproject.toml exists, uv.lock generated│
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Python 3.11 venv       │ ✅        │ .venv/ folder, python --version = 3.11 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Directory structure    │ ✅        │ 39 directories created                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 89 prod packages       │ ✅        │ uv sync output shows 89 installed     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 18 dev packages        │ ✅        │ uv sync --extra dev shows 18 installed│
-├─────────────────────────────────────────────────────────────────────────────┤
-│ .gitignore             │ ✅        │ Excludes venv, env, models, node_modules│
-├─────────────────────────────────────────────────────────────────────────────┤
-│ .env.example           │ ✅        │ Contains all required variables       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ pre-commit config      │ ✅        │ .pre-commit-config.yaml exists        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ pre-commit installed   │ ✅        │ pre-commit run --all-files passes     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ .python-version        │ ✅        │ Contains "3.11"                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Clear commit message   │ ✅        │ Commit ea75790 explains WHAT and WHY  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Pushed to GitHub       │ ✅        │ git push successful                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ No secrets committed   │ ✅        │ .env in gitignore, no real keys in    │
-│                        │           │ .env.example                          │
-└─────────────────────────────────────────────────────────────────────────────┘
++------------------------+----------+-----------------------------------------+
+| REQUIREMENT            | STATUS   | EVIDENCE                                |
++------------------------+----------+-----------------------------------------+
+| GitHub repo created    | ✅       | github.com/Jawad-Mansour/               |
+|                        |          | smart-travel-planner                    |
++------------------------+----------+-----------------------------------------+
+| UV initialized         | ✅       | pyproject.toml exists, uv.lock generated|
++------------------------+----------+-----------------------------------------+
+| Python 3.11 venv       | ✅       | .venv/ folder, python --version = 3.11  |
++------------------------+----------+-----------------------------------------+
+| Directory structure    | ✅       | 39 directories created                  |
++------------------------+----------+-----------------------------------------+
+| 89 prod packages       | ✅       | uv sync output shows 89 installed       |
++------------------------+----------+-----------------------------------------+
+| 18 dev packages        | ✅       | uv sync --extra dev shows 18 installed  |
++------------------------+----------+-----------------------------------------+
+| .gitignore             | ✅       | Excludes venv, env, models, node_modules|
++------------------------+----------+-----------------------------------------+
+| .env.example           | ✅       | Contains all required variables         |
++------------------------+----------+-----------------------------------------+
+| pre-commit config      | ✅       | .pre-commit-config.yaml exists          |
++------------------------+----------+-----------------------------------------+
+| pre-commit installed   | ✅       | pre-commit run --all-files passes       |
++------------------------+----------+-----------------------------------------+
+| .python-version        | ✅       | Contains "3.11"                         |
++------------------------+----------+-----------------------------------------+
+| Clear commit message   | ✅       | Commit ea75790 explains WHAT and WHY    |
++------------------------+----------+-----------------------------------------+
+| Pushed to GitHub       | ✅       | git push successful                     |
++------------------------+----------+-----------------------------------------+
+| No secrets committed   | ✅       | .env in gitignore, no real keys in      |
+|                        |          | .env.example                            |
++------------------------+----------+-----------------------------------------+
 
 
 ================================================================================
@@ -281,47 +281,42 @@ SECTION 6: WHAT PHASE 0 DID NOT YET BUILD (INTENTIONAL)
 
 The following will be built in later phases:
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ ITEM                    │ PHASE      │ REASON                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ CSV dataset (100-200    │ 1          │ Requires research and labeling       │
-│ destinations)           │            │                                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ ML training code        │ 2-5        │ Requires dataset first               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ RAG content and chunks  │ 7-9        │ Requires chunking decisions         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ LLM service             │ 14         │ Requires API keys configured        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Agent implementation    │ 15-21      │ Requires tools and LLM              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ FastAPI routes          │ 23-25      │ Requires services and agent         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ React frontend          │ 26         │ Requires backend API                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ README with diagrams    │ 29         │ Final deliverable, not phase 0      │
-└─────────────────────────────────────────────────────────────────────────────┘
++------------------------+----------+---------------------------------------+
+| ITEM                   | PHASE    | REASON                                |
++------------------------+----------+---------------------------------------+
+| ML training code       | 2-6      | Requires dataset first                |
++------------------------+----------+---------------------------------------+
+| RAG content and chunks | 7-10     | Requires chunking decisions           |
++------------------------+----------+---------------------------------------+
+| LLM service            | 15       | Requires API keys configured          |
++------------------------+----------+---------------------------------------+
+| Agent implementation   | 16-22    | Requires tools and LLM                |
++------------------------+----------+---------------------------------------+
+| FastAPI routes         | 24-26    | Requires services and agent           |
++------------------------+----------+---------------------------------------+
+| React frontend         | 27       | Requires backend API                  |
++------------------------+----------+---------------------------------------+
+| README with diagrams   | 30       | Final deliverable, not phase 0        |
++------------------------+----------+---------------------------------------+
 
 
 ================================================================================
-SECTION 7: NEXT ACTIONS - PHASE 1
+SECTION 7: NEXT ACTIONS - PHASE 2
 ================================================================================
 
-BRANCH: feature/ml-dataset
+BRANCH: feature/ml-eda
 
 TASKS:
-1. Research 100-200 destinations with coordinates, climate, cost data
-2. Define feature categories (10-15 features like avg_temperature,
-   daily_budget, tourist_density, hiking_availability)
-3. Label each destination with primary and secondary travel styles
-   (Adventure, Relaxation, Culture, Budget, Luxury, Family)
-4. Document labeling rules in README
-5. Export CSV to backend/ml/data/destinations.csv
-6. Commit and push to feature/ml-dataset branch
+1. Create Notebook 01: backend/ml/notebooks/01_eda_data_audit.ipynb
+2. Load destinations_raw.csv and validate structure
+3. Report missing values, duplicates, class distribution
+4. Export experiments/class_distribution_raw.csv
+5. Export experiments/feature_summary.csv
+6. Commit and push to feature/ml-eda branch
 
 COMMANDS:
-git checkout -b feature/ml-dataset
-git push -u origin feature/ml-dataset
+git checkout -b feature/ml-eda
+git push -u origin feature/ml-eda
 
 
 ================================================================================
@@ -354,9 +349,9 @@ Phase 0 is complete and verified. The project foundation is solid:
 - ✅ Security foundations (.env, .gitignore)
 - ✅ Containerization ready (docker-compose.yml)
 - ✅ Test framework configured (pytest + pytest-asyncio)
-- ✅ CI/CD ready (.github/workflows - to be implemented in Phase 28)
+- ✅ CI/CD ready (.github/workflows)
 
-Ready to proceed to Phase 1: Travel Dataset Compilation.
+Ready to proceed to Phase 2: EDA & Data Audit (Notebook 01).
 
 ================================================================================
 END OF PHASE 0 COMPLETION REPORT

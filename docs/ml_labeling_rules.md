@@ -3,7 +3,7 @@
                     Smart Travel Planner
 ================================================================================
 
-DATE: April 28, 2026
+DATE: April 29, 2026
 STATUS: FINAL - APPROVED
 
 
@@ -82,75 +82,83 @@ some historical/cultural significance.
 
 
 ================================================================================
-SECTION 2: VERIFICATION EXAMPLES
+SECTION 2: VERIFICATION EXAMPLES (FROM ACTUAL DATASET)
 ================================================================================
 
-EXAMPLE 1: Bali, Indonesia
---------------------------
-Scores: hiking_score=9, beach_score=8, wellness_score=9, near_mountains=1
-Evaluation: Rule 1 (hiking_score>=7) -> TRUE
+EXAMPLE 1: Bali, Indonesia (DST-0050)
+-------------------------------------
+Scores: hiking_score=6, beach_score=8, wellness_score=9, near_mountains=1
+Evaluation: Rule 1 (near_mountains=1) -> TRUE
 RESULT: Adventure
 
-EXAMPLE 2: Swiss Alps, Switzerland
-----------------------------------
+EXAMPLE 2: Swiss Alps, Switzerland (DST-0046)
+---------------------------------------------
 Scores: scenic_score=10, hiking_score=9, near_mountains=1
 Evaluation: Rule 1 (hiking_score>=7) -> TRUE
 RESULT: Adventure
 
-EXAMPLE 3: Kyoto, Japan
------------------------
-Scores: culture_score=10, museum_count=50, monument_count=30
+EXAMPLE 3: Kyoto, Japan (DST-0019)
+----------------------------------
+Scores: culture_score=10, museum_count=50, monument_count=40
 Evaluation: Rule 3 (culture_score>=8) -> TRUE
 RESULT: Culture
 
-EXAMPLE 4: Vietnam (Budget)
----------------------------
-Scores: cost_per_day_avg_usd=35, meal_budget_usd=3, hotel_night_avg_usd=20
+EXAMPLE 4: Ho Chi Minh City, Vietnam (DST-0111)
+-----------------------------------------------
+Scores: cost_per_day_avg_usd=30, meal_budget_usd=3, hotel_night_avg_usd=20
 Evaluation: Rule 6 (all conditions true) -> TRUE
 RESULT: Budget
 
-EXAMPLE 5: Ibiza, Spain
------------------------
-Scores: nightlife_score=9, beach_score=8
-Evaluation: Rule 1 FALSE, Rule 2 FALSE, Rule 7 (nightlife>=8) -> TRUE
+EXAMPLE 5: Bangkok, Thailand (DST-0034)
+---------------------------------------
+Scores: nightlife_score=8, culture_score=7
+Evaluation: Rule 7 (nightlife_score>=8) -> TRUE
 RESULT: Adventure (Party style)
 
-EXAMPLE 6: Paris, France
-------------------------
+EXAMPLE 6: Paris, France (DST-0017)
+-----------------------------------
 Scores: culture_score=10, museum_count=130, luxury_score=8
 Evaluation: Rule 3 (culture_score>=8) -> TRUE
 RESULT: Culture
 
-EXAMPLE 7: Dubai, UAE (Luxury by hotel price)
----------------------------------------------
-Scores: hotel_night_avg_usd=350, luxury_score=7, cost_per_day_avg_usd=250
+EXAMPLE 7: Dubai, UAE (DST-0043)
+--------------------------------
+Scores: hotel_night_avg_usd=220, luxury_score=10, cost_per_day_avg_usd=250
 Evaluation: Rule 4 (hotel_night_avg_usd>=150) -> TRUE
 RESULT: Luxury
 
 
 ================================================================================
-SECTION 3: EXPECTED CLASS DISTRIBUTION (150 destinations)
+SECTION 3: ACTUAL CLASS DISTRIBUTION (155 destinations)
 ================================================================================
 
 +----------------+----------+---------------------------------------------+
 | STYLE          | COUNT    | WHY                                         |
 +----------------+----------+---------------------------------------------+
-| Adventure      | 45       | Most common - hiking, mountains, party      |
+| Adventure      | 46       | Most common - hiking, mountains, party,     |
+|                |          | adventure sports triggers                   |
 +----------------+----------+---------------------------------------------+
-| Culture        | 35       | Common - museums, monuments, festivals      |
+| Culture        | 35       | Common - museums, monuments, festivals,     |
+|                |          | and the default fallback                    |
 +----------------+----------+---------------------------------------------+
-| Relaxation     | 30       | Beaches, scenery, wellness                  |
+| Relaxation     | 20       | Beaches, scenery, wellness retreats         |
 +----------------+----------+---------------------------------------------+
-| Budget         | 20       | Southeast Asia, Eastern Europe, backpacker  |
+| Budget         | 18       | Southeast Asia, Eastern Europe, backpacker  |
+|                |          | routes                                      |
 +----------------+----------+---------------------------------------------+
 | Family         | 12       | Theme parks, safe beaches, kid activities   |
 +----------------+----------+---------------------------------------------+
-| Luxury         | 8        | High cost, premium resorts                  |
+| Luxury         | 8        | High cost, premium resorts, overwater villas|
++----------------+----------+---------------------------------------------+
+| TOTAL UNIQUE   | 139      | 16 rows are duplicates (6 pairs + variants) |
++----------------+----------+---------------------------------------------+
+| TOTAL ROWS     | 155      | Includes intentional duplicates             |
 +----------------+----------+---------------------------------------------+
 
 IMBALANCE HANDLING:
 - Use macro F1 (not accuracy) for model selection
 - Apply class_weight='balanced' in classifiers
+- Apply SMOTENC before train/test split
 - Report per-class metrics for all styles
 
 
