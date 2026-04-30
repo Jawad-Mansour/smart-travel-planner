@@ -185,7 +185,7 @@ class WeatherService:
     )
     async def _request_json(
         self, method: str, url: str, *, params: dict[str, Any]
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | list[Any]:
         client = self._require_client()
         response = await client.request(method, url, params=params)
         try:
@@ -198,8 +198,8 @@ class WeatherService:
             detail = f"HTTP {status}: {body_preview}"
             raise RuntimeError(detail) from exc
         data = response.json()
-        if not isinstance(data, dict):
-            msg = "OpenWeather response JSON was not an object"
+        if not isinstance(data, (dict, list)):
+            msg = "OpenWeather response JSON was not an object or array"
             raise TypeError(msg)
         return data
 

@@ -17,6 +17,7 @@ from backend.app.api.deps import (
 from backend.app.core.agent import run_travel_agent
 from backend.app.core.config import Settings
 from backend.app.db.models import AgentRun, ToolCall
+from backend.app.schemas.intent import IntentResult
 
 router = APIRouter(prefix="/travel", tags=["travel"])
 
@@ -41,7 +42,21 @@ async def plan_travel(
         result = await run_travel_agent(settings, q)
         answer = result.get("answer") or ""
         usage = result.get("usage_parts") or []
-        payload = {"answer": answer, "usage": usage, "intent": result.get("intent")}
+        raw_intent = result.get("intent")
+        intent_obj = (
+            IntentResult.model_validate(raw_intent)
+            if isinstance(raw_intent, dict)
+            else IntentResult()
+        )
+        missing = sorted(set(intent_obj.critical_missing()) | set(intent_obj.missing_fields))
+        is_clarification = bool(result.get("clarification"))
+        payload = {
+            "answer": answer,
+            "usage": usage,
+            "intent": raw_intent,
+            "needs_clarification": bool(missing) and is_clarification,
+            "missing_fields": missing if is_clarification else [],
+        }
         yield "data: " + json.dumps(payload, default=str) + "\n\n"
 
         tools_blob = (

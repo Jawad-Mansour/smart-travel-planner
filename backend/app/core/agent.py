@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import time
 from typing import Any, AsyncIterator, Literal
@@ -13,6 +14,15 @@ from typing import Any, AsyncIterator, Literal
 import structlog
 from langgraph.graph import END, START, StateGraph
 from openai import AsyncOpenAI
+
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover - optional tracing fallback
+    def traceable(*_: Any, **__: Any):
+        def _decorator(fn):
+            return fn
+
+        return _decorator
 
 from backend.app.core.config import Settings
 from backend.app.schemas.intent import IntentResult
@@ -67,6 +77,11 @@ Pick a winner, explain why in 2-4 sentences, and name trade-offs (e.g. if anothe
 7. Be HONEST: label budget stress with ⚠️ and good fits with ✅. Say clearly if weather is suboptimal (monsoon, cold snaps, wildfire season, etc.).
 
 8. NEVER use generic filler bullets like "beautiful scenery" without tying them to THIS user's stated preferences and numbers.
+8.1 NEVER use boilerplate phrases such as:
+- "Selected from classifier results aligned with your trip preferences."
+- "Included because it has the strongest available tool-backed fit."
+- "Travelers seeking value-for-money options matching your request."
+Every bullet must be destination-specific and user-specific.
 
 9. Use tool JSON below for costs, weather, and destination facts. If a tool failed, say so briefly and still give reasoned estimates marked as approximate.
 
@@ -153,6 +168,19 @@ def _clean_weather_line(text: str) -> str:
     return t
 
 
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        canon = re.sub(r"\s+", " ", item.strip().lower())
+        canon = re.sub(r"[^a-z0-9 $:/+%().,-]", "", canon)
+        if not canon or canon in seen:
+            continue
+        seen.add(canon)
+        out.append(item)
+    return out
+
+
 def _clean_recommendation_title(text: str) -> str:
     t = _normalize_line(text)
     if t.lower() in {"my recommendation", "recommendation"}:
@@ -177,7 +205,124 @@ def _enforce_daily_budget_line(line: str, user_budget_per_day: float | None) -> 
     return f"{base} -> Compare against your ${ref}/day"
 
 
-def _render_structured_markdown(payload: dict[str, Any], user_budget_per_day: float | None) -> str:
+def _fallback_destinations_from_tools(
+    tool_results: dict[str, Any],
+    intent: IntentResult,
+    month_label: str,
+    user_budget_per_day: float | None,
+) -> list[dict[str, Any]]:
+    """
+    Build deterministic destination fallbacks from classifier + live tool envelopes.
+    This prevents placeholder destinations when synthesis JSON omits destinations.
+    """
+    classifier = (
+        tool_results.get("classifier") if isinstance(tool_results.get("classifier"), dict) else {}
+    )
+    rows = classifier.get("payload", {}).get("destinations", []) if classifier else []
+    if not isinstance(rows, list):
+        rows = []
+
+    flights_rows = tool_results.get("flights", []) if isinstance(tool_results.get("flights"), list) else []
+    weather_rows = tool_results.get("weather", []) if isinstance(tool_results.get("weather"), list) else []
+
+    by_city_flight: dict[str, str] = {}
+    for item in flights_rows:
+        if not isinstance(item, dict):
+            continue
+        payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+        est = payload.get("estimate") if isinstance(payload.get("estimate"), dict) else {}
+        city = str(est.get("destination_display") or est.get("destination_city") or "").strip()
+        usd = est.get("round_trip_price_usd_estimate")
+        if usd is None:
+            usd = est.get("estimated_usd")
+        if city:
+            by_city_flight[city.lower()] = (
+                f"✈️ Flight: Estimated round-trip from NYC ${int(float(usd))}"
+                if isinstance(usd, (int, float))
+                else "✈️ Flight estimate unavailable"
+            )
+
+    by_city_weather: dict[str, str] = {}
+    for item in weather_rows:
+        if not isinstance(item, dict):
+            continue
+        city = str(item.get("city") or "").strip()
+        env = item.get("envelope") if isinstance(item.get("envelope"), dict) else {}
+        payload = env.get("payload") if isinstance(env.get("payload"), dict) else {}
+        forecast = payload.get("forecast") if isinstance(payload.get("forecast"), dict) else {}
+        summary = ""
+        daily = forecast.get("daily") if isinstance(forecast.get("daily"), list) else []
+        if daily and isinstance(daily[0], dict):
+            first = daily[0]
+            cond = str(first.get("conditions_summary") or "").strip()
+            tmin = first.get("temp_min_c")
+            tmax = first.get("temp_max_c")
+            if cond and isinstance(tmin, (int, float)) and isinstance(tmax, (int, float)):
+                summary = f"{cond.capitalize()}, around {int(tmin)}-{int(tmax)}°C"
+            elif cond:
+                summary = cond.capitalize()
+        if not summary:
+            err = env.get("error") if isinstance(env.get("error"), dict) else {}
+            detail = str(err.get("detail") or "").strip()
+            if detail:
+                summary = f"Forecast unavailable ({detail[:90]})"
+        if city:
+            by_city_weather[city.lower()] = summary or f"Weather estimate for {month_label} unavailable"
+
+    out: list[dict[str, Any]] = []
+    traveler = (intent.traveler_style or "traveler").strip()
+    activities = ", ".join(intent.activities[:2]) if intent.activities else "your planned activities"
+    temp_pref = intent.temperature_preference or "your preferred climate"
+    crowd_pref = intent.tourist_density or "balanced crowd levels"
+    for row in rows[:5]:
+        if not isinstance(row, dict):
+            continue
+        city = str(row.get("destination_city") or "").strip()
+        country = str(row.get("country") or "").strip() or "Unknown"
+        daily = row.get("cost_per_day_avg_usd")
+        daily_num = float(daily) if isinstance(daily, (int, float)) else None
+        hotel_est = daily_num * 0.55 if daily_num is not None else None
+
+        daily_line = (
+            f"Daily budget range: ${int(max(30, daily_num - 20))}-${int(daily_num + 20)}"
+            if daily_num is not None
+            else "Daily budget: estimate unavailable"
+        )
+        if user_budget_per_day is not None and daily_num is not None:
+            mark = "✅" if daily_num <= user_budget_per_day else "⚠️"
+            verdict = "fits" if daily_num <= user_budget_per_day else "exceeds"
+            daily_line = f"{daily_line} ({verdict} your ${round(user_budget_per_day,2)}/day {mark})"
+
+        out.append(
+            {
+                "name": city or "Recommended destination",
+                "country": country,
+                "flag_emoji": "🌍",
+                "why_matches": [
+                    f"Matches your {activities} focus for this trip.",
+                    f"Fits your {month_label} timing and preference for {temp_pref} conditions.",
+                    f"Suitable for a {traveler} and preference for {crowd_pref}.",
+                ],
+                "daily_budget_line": daily_line,
+                "flight_line": by_city_flight.get(city.lower(), "✈️ Flight estimate unavailable"),
+                "accommodation_line": (
+                    f"Accommodation per night: ~${int(max(25, hotel_est - 15))}-${int(hotel_est + 20)}"
+                    if hotel_est is not None
+                    else "Accommodation estimate unavailable"
+                ),
+                "total_line": "Total trip estimate depends on exact dates and booking window.",
+                "weather_line": by_city_weather.get(city.lower(), "Weather estimate unavailable"),
+                "best_for": f"{traveler.capitalize()} travelers prioritizing {activities}",
+            }
+        )
+    return out
+
+
+def _render_structured_markdown(
+    payload: dict[str, Any],
+    user_budget_per_day: float | None,
+    fallback_destinations: list[dict[str, Any]] | None = None,
+) -> str:
     """Render strict markdown layout from structured synthesis JSON."""
     intro = _normalize_line(str(payload.get("intro") or ""))
     month_label = _normalize_line(str(payload.get("month_label") or "your travel dates"))
@@ -187,6 +332,12 @@ def _render_structured_markdown(payload: dict[str, Any], user_budget_per_day: fl
         payload.get("destinations") if isinstance(payload.get("destinations"), list) else []
     )
     destinations = destinations[:5]
+    fallback_destinations = fallback_destinations or []
+    if len(destinations) < 3:
+        for fb in fallback_destinations:
+            if len(destinations) >= 5:
+                break
+            destinations.append(fb)
     while len(destinations) < 3:
         idx = len(destinations) + 1
         destinations.append(
@@ -232,6 +383,13 @@ def _render_structured_markdown(payload: dict[str, Any], user_budget_per_day: fl
         best_for = _normalize_line(str(d.get("best_for") or "General travelers"))
         why_raw = d.get("why_matches") if isinstance(d.get("why_matches"), list) else []
         why_items = [_normalize_line(str(x)) for x in why_raw if _normalize_line(str(x))]
+        why_items = [
+            x
+            for x in why_items
+            if "why it matches your preferences" not in x.lower()
+            and "matches your preferences" not in x.lower()
+        ]
+        why_items = _dedupe_preserve_order(why_items)
         if len(why_items) < 3:
             why_items = (why_items + ["Matches your budget and activity preferences."] * 3)[:3]
 
@@ -256,8 +414,25 @@ def _render_structured_markdown(payload: dict[str, Any], user_budget_per_day: fl
 
     lines.append("## My Recommendation")
     lines.append("")
+    if not rec_body and destinations:
+        d0 = destinations[0] if isinstance(destinations[0], dict) else {}
+        top_name = _normalize_line(str(d0.get("name") or "Top option"))
+        top_country = _normalize_line(str(d0.get("country") or ""))
+        rec_body = f"{top_name}, {top_country} is the strongest overall fit for your constraints."
     lines.append(f"**{rec_title}** {rec_body}".strip())
     return "\n".join(lines).strip()
+
+
+def _configure_langsmith_env(settings: Settings) -> None:
+    """
+    Bridge LANGCHAIN_* env vars to LANGSMITH_* for `langsmith.traceable`.
+    """
+    if settings.langchain_tracing_v2 and "LANGSMITH_TRACING" not in os.environ:
+        os.environ["LANGSMITH_TRACING"] = "true"
+    if settings.langchain_api_key and "LANGSMITH_API_KEY" not in os.environ:
+        os.environ["LANGSMITH_API_KEY"] = settings.langchain_api_key
+    if settings.langchain_project and "LANGSMITH_PROJECT" not in os.environ:
+        os.environ["LANGSMITH_PROJECT"] = settings.langchain_project
 
 
 class TravelAgentGraph:
@@ -314,7 +489,12 @@ class TravelAgentGraph:
                 "To suggest destinations, I need your trip length (days), approximate total "
                 "budget (USD), and what you'd like to do (e.g. hiking, beaches, food)."
             )
-            return {"user_query": user_query, "clarification": text, "answer": text}
+            return {
+                "user_query": user_query,
+                "intent": state.get("intent"),
+                "clarification": text,
+                "answer": text,
+            }
 
         completion = await self._client.chat.completions.create(
             model=self.settings.openai_cheap_model,
@@ -336,6 +516,7 @@ class TravelAgentGraph:
         ]
         return {
             "user_query": user_query,
+            "intent": state.get("intent"),
             "clarification": text,
             "answer": text,
             "usage_parts": usage,
@@ -427,7 +608,7 @@ class TravelAgentGraph:
         dt_ms = int((time.perf_counter() - t0) * 1000)
         bundle["orchestration_ms"] = dt_ms
         logger.info("agent.tools.done", ms=dt_ms, n_cities=len(cities))
-        return {"user_query": q, "tool_results": bundle}
+        return {"user_query": q, "intent": state.get("intent"), "tool_results": bundle}
 
     async def _synthesize(self, state: dict[str, Any]) -> dict[str, Any]:
         intent = IntentResult.model_validate(state.get("intent", {}))
@@ -468,7 +649,7 @@ Tool outputs (JSON) — ground your cost and weather claims here:
                 "Configure OPENAI_API_KEY to synthesize a full multi-destination answer. "
                 "Tool results were collected successfully."
             )
-            return {"user_query": user_query, "answer": reply}
+            return {"user_query": user_query, "intent": state.get("intent"), "answer": reply}
 
         completion = await self._client.chat.completions.create(
             model=self.settings.openai_strong_model,
@@ -481,9 +662,17 @@ Tool outputs (JSON) — ground your cost and weather claims here:
             temperature=0.55,
         )
         raw_json = completion.choices[0].message.content or "{}"
+        tool_results = state.get("tool_results") if isinstance(state.get("tool_results"), dict) else {}
         try:
             structured = json.loads(raw_json)
-            reply = _render_structured_markdown(structured, per_day)
+            month_label = str(structured.get("month_label") or intent.timing_or_season or "your travel dates")
+            fallback_destinations = _fallback_destinations_from_tools(
+                tool_results=tool_results,
+                intent=intent,
+                month_label=month_label,
+                user_budget_per_day=per_day,
+            )
+            reply = _render_structured_markdown(structured, per_day, fallback_destinations)
         except Exception:
             logger.exception("agent.synthesis.json_parse_failed")
             reply = (
@@ -503,11 +692,19 @@ Tool outputs (JSON) — ground your cost and weather claims here:
                 "model": self.settings.openai_strong_model,
             }
         ]
-        return {"user_query": user_query, "answer": reply, "usage_parts": usage}
+        return {
+            "user_query": user_query,
+            "intent": state.get("intent"),
+            "answer": reply,
+            "usage_parts": usage,
+            "tool_results": state.get("tool_results", {}),
+        }
 
 
+@traceable(name="run_travel_agent", run_type="chain")
 async def run_travel_agent(settings: Settings, user_query: str) -> dict[str, Any]:
     """Execute compiled graph and return final state."""
+    _configure_langsmith_env(settings)
     agent = TravelAgentGraph(settings)
     graph = agent.compile()
     result = await graph.ainvoke(

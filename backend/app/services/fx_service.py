@@ -53,7 +53,7 @@ class FxResult(BaseModel):
         return cls(ok=True, snapshot=snapshot, failure=None)
 
     @classmethod
-    def failure(cls, error: str, detail: str | None = None) -> FxResult:
+    def fail(cls, error: str, detail: str | None = None) -> FxResult:
         return cls(ok=False, snapshot=None, failure=FxFailure(error=error, detail=detail))
 
 
@@ -129,15 +129,15 @@ class FxService:
             data = await self._get_json(url)
         except httpx.HTTPStatusError as exc:
             logger.warning("fx.http_error", status=exc.response.status_code)
-            return FxResult.failure("Exchange rate request failed", detail=str(exc))
+            return FxResult.fail("Exchange rate request failed", detail=str(exc))
         except Exception as exc:
             logger.exception("fx.error", error=str(exc))
-            return FxResult.failure("Exchange rate service error", detail=str(exc))
+            return FxResult.fail("Exchange rate service error", detail=str(exc))
 
         # open.er-api shape: { "result": "success", "base_code": "USD", "rates": { ... } }
         rates_raw = data.get("rates")
         if not isinstance(rates_raw, dict):
-            return FxResult.failure("Unexpected FX payload", detail="missing rates")
+            return FxResult.fail("Unexpected FX payload", detail="missing rates")
 
         rates: dict[str, float] = {}
         for k, v in rates_raw.items():
@@ -156,14 +156,14 @@ class FxService:
     async def convert_usd_to(self, amount_usd: float, target_currency: str) -> FxResult:
         """Convert an amount expressed in USD to ``target_currency`` (e.g. EUR)."""
         if amount_usd < 0:
-            return FxResult.failure("Amount must be non-negative")
+            return FxResult.fail("Amount must be non-negative")
         tgt = target_currency.strip().upper()
         root = await self.latest_rates(base_currency="USD")
         if not root.ok or root.snapshot is None:
             return root
         rate = root.snapshot.rates.get(tgt)
         if rate is None:
-            return FxResult.failure(f"No rate for {tgt}", detail="Currency not in snapshot")
+            return FxResult.fail(f"No rate for {tgt}", detail="Currency not in snapshot")
         converted = amount_usd * rate
         snap = ExchangeRatesSnapshot(
             base_code="USD",

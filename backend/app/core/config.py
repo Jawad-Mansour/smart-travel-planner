@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     langchain_tracing_v2: bool = Field(default=False, alias="LANGCHAIN_TRACING_V2")
     langchain_api_key: str | None = Field(default=None, alias="LANGCHAIN_API_KEY")
     langchain_project: str | None = Field(default="smart-travel-planner", alias="LANGCHAIN_PROJECT")
+    langsmith_tracing: bool | None = Field(default=None, alias="LANGSMITH_TRACING")
+    langsmith_endpoint: str | None = Field(default=None, alias="LANGSMITH_ENDPOINT")
+    langsmith_api_key: str | None = Field(default=None, alias="LANGSMITH_API_KEY")
+    langsmith_project: str | None = Field(default=None, alias="LANGSMITH_PROJECT")
 
     frontend_url: str = Field(default="http://localhost:5173", alias="FRONTEND_URL")
     cors_allowed_origins: str = Field(

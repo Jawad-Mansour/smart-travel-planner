@@ -32,6 +32,20 @@ class DatabaseSettings(BaseSettings):
     )
 
 
+def normalize_asyncpg_dsn(database_url: str) -> str:
+    """
+    Convert SQLAlchemy async DSN to an asyncpg-compatible DSN.
+
+    asyncpg accepts:
+    - postgresql://
+    - postgres://
+    """
+    dsn = str(database_url or "").strip()
+    if dsn.startswith("postgresql+asyncpg://"):
+        return dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
+    return dsn
+
+
 # ============================================================
 # LOGGING
 # ============================================================
@@ -51,7 +65,7 @@ def configure_logging() -> None:
 
 def build_admin_url(target_url: str) -> tuple[str, str]:
     """Build admin connection URL (to 'postgres' default DB) and extract target DB name."""
-    parsed = urlparse(target_url)
+    parsed = urlparse(normalize_asyncpg_dsn(target_url))
     db_name = parsed.path.lstrip("/")
     # Connect to default 'postgres' database to create new DB
     admin_url = parsed._replace(path="/postgres").geturl()
@@ -163,6 +177,7 @@ async def create_schema(settings: DatabaseSettings) -> None:
 
 
 async def connect_with_retry(database_url: str) -> asyncpg.Connection:
+    dsn = normalize_asyncpg_dsn(database_url)
     async for attempt in AsyncRetrying(
         stop=stop_after_attempt(8),
         wait=wait_fixed(3),
@@ -172,7 +187,7 @@ async def connect_with_retry(database_url: str) -> asyncpg.Connection:
         reraise=True,
     ):
         with attempt:
-            return await asyncpg.connect(database_url, timeout=20)
+            return await asyncpg.connect(dsn, timeout=20)
     raise RuntimeError("Retry loop exhausted while connecting to PostgreSQL")
 
 

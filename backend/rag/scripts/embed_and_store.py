@@ -37,6 +37,16 @@ class DatabaseSettings(BaseSettings):
     )
 
 
+def normalize_asyncpg_dsn(database_url: str) -> str:
+    """
+    Convert SQLAlchemy async DSN to an asyncpg-compatible DSN.
+    """
+    dsn = str(database_url or "").strip()
+    if dsn.startswith("postgresql+asyncpg://"):
+        return dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
+    return dsn
+
+
 class ChunkRecord(BaseModel):
     id: int
     type: str
@@ -227,6 +237,7 @@ async def store_chunks(chunks: list[ChunkRecord], settings: DatabaseSettings) ->
 
 
 async def connect_with_retry(database_url: str) -> asyncpg.Connection:
+    dsn = normalize_asyncpg_dsn(database_url)
     async for attempt in AsyncRetrying(
         stop=stop_after_attempt(8),
         wait=wait_fixed(3),
@@ -236,7 +247,7 @@ async def connect_with_retry(database_url: str) -> asyncpg.Connection:
         reraise=True,
     ):
         with attempt:
-            return await asyncpg.connect(database_url, timeout=20)
+            return await asyncpg.connect(dsn, timeout=20)
     raise RuntimeError("Retry loop exhausted while connecting to PostgreSQL")
 
 
