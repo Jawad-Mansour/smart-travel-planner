@@ -18,7 +18,10 @@ def init_engine(settings: Settings | None = None) -> None:
     s = settings or get_settings()
     if _engine is not None:
         return
-    _engine = create_async_engine(s.database_url, echo=s.debug, pool_pre_ping=True)
+    db_url = str(s.database_url)
+    if db_url.startswith("postgresql://"):
+        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    _engine = create_async_engine(db_url, echo=s.debug, pool_pre_ping=True)
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
 
 

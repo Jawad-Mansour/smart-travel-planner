@@ -13,7 +13,7 @@ from backend.app.core.logging import configure_logging
 from backend.app.db.session import create_tables, dispose_engine, init_engine
 from backend.app.services.flights_service import clear_flights_service_cache, get_flights_service
 from backend.app.services.fx_service import clear_fx_service_cache, get_fx_service
-from backend.app.services.rag_service import RAGService
+from backend.app.services.rag_service import get_instance as get_rag_service
 from backend.app.services.weather_service import clear_weather_service_cache, get_weather_service
 
 _settings = get_settings()
@@ -58,11 +58,11 @@ async def lifespan(_: FastAPI):
     configure_logging(json_logs=not _settings.debug)
     init_engine(_settings)
     await create_tables()
-    await RAGService.get_instance().startup()
+    await get_rag_service().startup()
     yield
     await _shutdown_cached_http_clients()
     try:
-        await RAGService.get_instance().shutdown()
+        await get_rag_service().shutdown()
     except Exception:
         pass
     await dispose_engine()

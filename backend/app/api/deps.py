@@ -12,7 +12,7 @@ from backend.app.core.config import Settings, get_settings
 from backend.app.db.session import get_async_session
 from backend.app.services.flights_service import FlightsService, get_flights_service
 from backend.app.services.fx_service import FxService, get_fx_service
-from backend.app.services.rag_service import RAGService
+from backend.app.services.rag_service import RAGService, get_instance
 from backend.app.services.weather_service import WeatherService, get_weather_service
 
 
@@ -49,7 +49,7 @@ def fx_dep(settings: Annotated[Settings, Depends(settings_dep)]) -> FxService:
 
 
 def rag_dep() -> RAGService:
-    return RAGService.get_instance()
+    return get_instance()
 
 
 async def current_user_sub(

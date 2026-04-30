@@ -268,6 +268,10 @@ class RAGService:
         return SentenceTransformer("all-MiniLM-L6-v2")
 
     async def _create_pool_with_retry(self, database_url: str) -> asyncpg.Pool:
+        # asyncpg expects "postgresql://" (or "postgres://"), not SQLAlchemy dialect DSNs.
+        dsn = database_url
+        if dsn.startswith("postgresql+asyncpg://"):
+            dsn = dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(8),
             wait=wait_fixed(3),
@@ -278,7 +282,7 @@ class RAGService:
         ):
             with attempt:
                 return await asyncpg.create_pool(
-                    database_url,
+                    dsn,
                     min_size=1,
                     max_size=10,
                     command_timeout=30,

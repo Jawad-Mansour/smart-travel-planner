@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     )
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
     openai_cheap_model: str = Field(default="gpt-4o-mini", alias="OPENAI_CHEAP_MODEL")
     openai_strong_model: str = Field(
         default="gpt-4o",
@@ -82,6 +83,19 @@ class Settings(BaseSettings):
     )
 
     default_flight_origin: str = Field(default="NYC", alias="DEFAULT_FLIGHT_ORIGIN")
+    rag_relevance_threshold: float = Field(default=0.48, alias="RAG_RELEVANCE_THRESHOLD")
+    rag_gibberish_raw_cap: float = Field(default=0.4, alias="RAG_GIBBERISH_RAW_CAP")
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def ensure_async_database_driver(cls, v: str) -> str:
+        """
+        Normalize sync Postgres URL to asyncpg for SQLAlchemy async engine.
+        """
+        s = str(v or "").strip()
+        if s.startswith("postgresql://"):
+            return s.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return s
 
 
 @lru_cache(maxsize=1)
