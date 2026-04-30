@@ -1,0 +1,93 @@
+"""Single ``Settings`` object for the backend (pydantic-settings, ``extra='forbid'``)."""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+class Settings(BaseSettings):
+    """
+    All configuration is loaded here — avoid ``os.getenv`` scattered across modules.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=_PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="forbid",
+        case_sensitive=False,
+    )
+
+    app_name: str = Field(default="Smart Travel Planner", alias="APP_NAME")
+    app_env: Literal["development", "staging", "production"] = Field(
+        default="development", alias="APP_ENV"
+    )
+    debug: bool = Field(default=False, alias="DEBUG")
+
+    secret_key: str = Field(default="change-me-in-production-use-long-random", alias="SECRET_KEY")
+    jwt_secret_key: str = Field(default="change-me-jwt-secret", alias="JWT_SECRET_KEY")
+    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_expiry_minutes: int = Field(default=60, alias="JWT_EXPIRY_MINUTES")
+
+    database_url: str = Field(
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/travel_planner",
+        alias="DATABASE_URL",
+    )
+
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    openai_cheap_model: str = Field(default="gpt-4o-mini", alias="OPENAI_CHEAP_MODEL")
+    openai_strong_model: str = Field(
+        default="gpt-4o",
+        alias="OPENAI_STRONG_MODEL",
+        description="Strong model for final travel synthesis (structured multi-destination answers).",
+    )
+
+    anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+
+    weather_api_key: str = Field(default="", alias="WEATHER_API_KEY")
+    weather_cache_ttl_seconds: int = Field(default=600, alias="WEATHER_CACHE_TTL_SECONDS")
+
+    amadeus_api_key: str | None = Field(default=None, alias="AMADEUS_API_KEY")
+    amadeus_api_secret: str | None = Field(default=None, alias="AMADEUS_API_SECRET")
+    flights_cache_ttl_seconds: int = Field(default=1800, alias="FLIGHTS_CACHE_TTL_SECONDS")
+
+    exchange_rate_api_key: str | None = Field(default=None, alias="EXCHANGE_RATE_API_KEY")
+    fx_cache_ttl_seconds: int = Field(default=3600, alias="FX_CACHE_TTL_SECONDS")
+    fx_base_url: str = Field(default="https://open.er-api.com/v6/latest", alias="FX_BASE_URL")
+
+    langchain_tracing_v2: bool = Field(default=False, alias="LANGCHAIN_TRACING_V2")
+    langchain_api_key: str | None = Field(default=None, alias="LANGCHAIN_API_KEY")
+    langchain_project: str | None = Field(default="smart-travel-planner", alias="LANGCHAIN_PROJECT")
+
+    frontend_url: str = Field(default="http://localhost:5173", alias="FRONTEND_URL")
+    cors_allowed_origins: str = Field(
+        default="http://localhost:5173",
+        alias="CORS_ALLOWED_ORIGINS",
+        description="Comma-separated origins",
+    )
+
+    ml_models_dir: Path = Field(
+        default=_PROJECT_ROOT / "backend" / "ml" / "models",
+        alias="ML_MODELS_DIR",
+    )
+    ml_destinations_csv: Path = Field(
+        default=_PROJECT_ROOT / "backend" / "ml" / "data" / "destinations_raw.csv",
+        alias="ML_DESTINATIONS_CSV",
+    )
+
+    default_flight_origin: str = Field(default="NYC", alias="DEFAULT_FLIGHT_ORIGIN")
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
+
+
+def clear_settings_cache() -> None:
+    get_settings.cache_clear()
