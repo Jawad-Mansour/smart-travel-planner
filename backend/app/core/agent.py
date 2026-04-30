@@ -183,7 +183,9 @@ def _render_structured_markdown(payload: dict[str, Any], user_budget_per_day: fl
     month_label = _normalize_line(str(payload.get("month_label") or "your travel dates"))
     rec_title = _clean_recommendation_title(str(payload.get("recommendation_title") or "Top pick"))
     rec_body = _normalize_line(str(payload.get("recommendation_body") or ""))
-    destinations = payload.get("destinations") if isinstance(payload.get("destinations"), list) else []
+    destinations = (
+        payload.get("destinations") if isinstance(payload.get("destinations"), list) else []
+    )
     destinations = destinations[:5]
     while len(destinations) < 3:
         idx = len(destinations) + 1
@@ -222,7 +224,9 @@ def _render_structured_markdown(payload: dict[str, Any], user_budget_per_day: fl
             user_budget_per_day,
         )
         flight = _normalize_line(str(d.get("flight_line") or "Flight estimate unavailable"))
-        accom = _normalize_line(str(d.get("accommodation_line") or "Accommodation estimate unavailable"))
+        accom = _normalize_line(
+            str(d.get("accommodation_line") or "Accommodation estimate unavailable")
+        )
         total = _normalize_line(str(d.get("total_line") or "Total estimate unavailable"))
         weather = _clean_weather_line(str(d.get("weather_line") or "Weather estimate unavailable"))
         best_for = _normalize_line(str(d.get("best_for") or "General travelers"))
@@ -330,7 +334,12 @@ class TravelAgentGraph:
                 else None,
             }
         ]
-        return {"user_query": user_query, "clarification": text, "answer": text, "usage_parts": usage}
+        return {
+            "user_query": user_query,
+            "clarification": text,
+            "answer": text,
+            "usage_parts": usage,
+        }
 
     async def _orchestrate_tools(self, state: dict[str, Any]) -> dict[str, Any]:
         intent = IntentResult.model_validate(state.get("intent", {}))
