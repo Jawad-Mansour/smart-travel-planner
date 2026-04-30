@@ -18,11 +18,13 @@ from openai import AsyncOpenAI
 try:
     from langsmith import traceable
 except Exception:  # pragma: no cover - optional tracing fallback
+
     def traceable(*_: Any, **__: Any):
         def _decorator(fn):
             return fn
 
         return _decorator
+
 
 from backend.app.core.config import Settings
 from backend.app.schemas.intent import IntentResult
@@ -222,8 +224,12 @@ def _fallback_destinations_from_tools(
     if not isinstance(rows, list):
         rows = []
 
-    flights_rows = tool_results.get("flights", []) if isinstance(tool_results.get("flights"), list) else []
-    weather_rows = tool_results.get("weather", []) if isinstance(tool_results.get("weather"), list) else []
+    flights_rows = (
+        tool_results.get("flights", []) if isinstance(tool_results.get("flights"), list) else []
+    )
+    weather_rows = (
+        tool_results.get("weather", []) if isinstance(tool_results.get("weather"), list) else []
+    )
 
     by_city_flight: dict[str, str] = {}
     for item in flights_rows:
@@ -267,11 +273,15 @@ def _fallback_destinations_from_tools(
             if detail:
                 summary = f"Forecast unavailable ({detail[:90]})"
         if city:
-            by_city_weather[city.lower()] = summary or f"Weather estimate for {month_label} unavailable"
+            by_city_weather[city.lower()] = (
+                summary or f"Weather estimate for {month_label} unavailable"
+            )
 
     out: list[dict[str, Any]] = []
     traveler = (intent.traveler_style or "traveler").strip()
-    activities = ", ".join(intent.activities[:2]) if intent.activities else "your planned activities"
+    activities = (
+        ", ".join(intent.activities[:2]) if intent.activities else "your planned activities"
+    )
     temp_pref = intent.temperature_preference or "your preferred climate"
     crowd_pref = intent.tourist_density or "balanced crowd levels"
     for row in rows[:5]:
@@ -662,10 +672,14 @@ Tool outputs (JSON) — ground your cost and weather claims here:
             temperature=0.55,
         )
         raw_json = completion.choices[0].message.content or "{}"
-        tool_results = state.get("tool_results") if isinstance(state.get("tool_results"), dict) else {}
+        tool_results = (
+            state.get("tool_results") if isinstance(state.get("tool_results"), dict) else {}
+        )
         try:
             structured = json.loads(raw_json)
-            month_label = str(structured.get("month_label") or intent.timing_or_season or "your travel dates")
+            month_label = str(
+                structured.get("month_label") or intent.timing_or_season or "your travel dates"
+            )
             fallback_destinations = _fallback_destinations_from_tools(
                 tool_results=tool_results,
                 intent=intent,
