@@ -95,7 +95,9 @@ class WeatherServiceResponse(BaseModel):
 
     @classmethod
     def failure(cls, error: str, detail: str | None = None) -> WeatherServiceResponse:
-        return cls(ok=False, forecast=None, failure=WeatherServiceFailure(error=error, detail=detail))
+        return cls(
+            ok=False, forecast=None, failure=WeatherServiceFailure(error=error, detail=detail)
+        )
 
 
 class GeocodeHit(BaseModel):
@@ -181,7 +183,9 @@ class WeatherService:
         wait=wait_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(_retryable_http),
     )
-    async def _request_json(self, method: str, url: str, *, params: dict[str, Any]) -> dict[str, Any]:
+    async def _request_json(
+        self, method: str, url: str, *, params: dict[str, Any]
+    ) -> dict[str, Any]:
         client = self._require_client()
         response = await client.request(method, url, params=params)
         try:
@@ -215,7 +219,10 @@ class WeatherService:
         try:
             return GeocodeHit.model_validate(row)
         except Exception:
-            logger.warning("weather.geocode.parse_error", row_keys=list(row.keys()) if isinstance(row, dict) else None)
+            logger.warning(
+                "weather.geocode.parse_error",
+                row_keys=list(row.keys()) if isinstance(row, dict) else None,
+            )
             return None
 
     def _aggregate_daily(

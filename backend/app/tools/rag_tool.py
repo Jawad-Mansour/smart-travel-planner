@@ -5,7 +5,6 @@ Phase 15: Async RAG tool wrapping :class:`backend.app.services.rag_service.RAGSe
 from __future__ import annotations
 
 import time
-from typing import Any
 
 import structlog
 
@@ -29,7 +28,9 @@ async def rag_search(
     tool_name = "rag_search"
     try:
         if destination:
-            rows = await rag.search_simple(query.strip(), destination=destination.strip(), top_k=top_k)
+            rows = await rag.search_simple(
+                query.strip(), destination=destination.strip(), top_k=top_k
+            )
         else:
             rows = await rag.search_all_destinations(query.strip(), top_k=top_k)
         ms = int((time.perf_counter() - t0) * 1000)

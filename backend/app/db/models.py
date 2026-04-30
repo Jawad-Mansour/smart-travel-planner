@@ -42,7 +42,10 @@ class ToolCall(Base):
         UUID(as_uuid=True), primary_key=True, default_factory=uuid.uuid4
     )
     run_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("agent_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
     input_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)

@@ -31,6 +31,7 @@ async def plan_travel(
     """SSE stream with final JSON payload (demo-friendly single-shot)."""
     q = str(body.get("query") or body.get("message") or "").strip()
     if not q:
+
         async def err_gen():
             yield "data: " + json.dumps({"error": "query required"}) + "\n\n"
 
@@ -43,7 +44,9 @@ async def plan_travel(
         payload = {"answer": answer, "usage": usage, "intent": result.get("intent")}
         yield "data: " + json.dumps(payload, default=str) + "\n\n"
 
-        tools_blob = result.get("tool_results") if isinstance(result.get("tool_results"), dict) else {}
+        tools_blob = (
+            result.get("tool_results") if isinstance(result.get("tool_results"), dict) else {}
+        )
         orch_ms = tools_blob.get("orchestration_ms") if isinstance(tools_blob, dict) else None
 
         run = AgentRun(

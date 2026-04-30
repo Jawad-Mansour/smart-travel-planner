@@ -145,7 +145,9 @@ class TravelAgentGraph:
             {
                 "step": "clarify",
                 "prompt_tokens": completion.usage.prompt_tokens if completion.usage else None,
-                "completion_tokens": completion.usage.completion_tokens if completion.usage else None,
+                "completion_tokens": completion.usage.completion_tokens
+                if completion.usage
+                else None,
             }
         ]
         return {"clarification": text, "answer": text, "usage_parts": usage}
@@ -289,7 +291,9 @@ Tool outputs (JSON) — ground your cost and weather claims here:
             {
                 "step": "synthesize",
                 "prompt_tokens": completion.usage.prompt_tokens if completion.usage else None,
-                "completion_tokens": completion.usage.completion_tokens if completion.usage else None,
+                "completion_tokens": completion.usage.completion_tokens
+                if completion.usage
+                else None,
                 "model": self.settings.openai_strong_model,
             }
         ]
@@ -300,13 +304,13 @@ async def run_travel_agent(settings: Settings, user_query: str) -> dict[str, Any
     """Execute compiled graph and return final state."""
     agent = TravelAgentGraph(settings)
     graph = agent.compile()
-    result = await graph.ainvoke({"user_query": user_query.strip(), "usage_parts": [], "tool_results": {}})
+    result = await graph.ainvoke(
+        {"user_query": user_query.strip(), "usage_parts": [], "tool_results": {}}
+    )
     return result
 
 
-async def stream_answer_fallback(
-    settings: Settings, user_query: str
-) -> AsyncIterator[str]:
+async def stream_answer_fallback(settings: Settings, user_query: str) -> AsyncIterator[str]:
     """Yield answer as chunks for SSE (non-streaming API aggregated into lines)."""
     out = await run_travel_agent(settings, user_query)
     answer = out.get("answer") or ""

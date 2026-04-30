@@ -67,7 +67,8 @@ def _mock_estimate(origin_city: str, destination_city: str) -> FlightEstimate:
     d = destination_city.strip().lower()
     base = 380.0 + (hash((o, d)) % 450)
     longhaul = sum(
-        1 for x in ("bangkok", "tokyo", "sydney", "kathmandu", "maldives", "bali", "dubai")
+        1
+        for x in ("bangkok", "tokyo", "sydney", "kathmandu", "maldives", "bali", "dubai")
         if x in d or x in o
     )
     price = base + longhaul * 220.0
@@ -96,7 +97,9 @@ class FlightsService:
         self._secret = (amadeus_api_secret or "").strip()
         self._cache_ttl = cache_ttl_seconds
         self._timeout = request_timeout_seconds
-        self._cache: TTLCache[str, FlightEstimate] = TTLCache(maxsize=max_cache_entries, ttl=cache_ttl_seconds)
+        self._cache: TTLCache[str, FlightEstimate] = TTLCache(
+            maxsize=max_cache_entries, ttl=cache_ttl_seconds
+        )
         self._cache_lock = asyncio.Lock()
         self._token_lock = asyncio.Lock()
         self._access_token: str | None = None
@@ -150,7 +153,9 @@ class FlightsService:
         wait=wait_exponential(multiplier=1, min=1, max=12),
         retry=retry_if_exception(_retryable_http),
     )
-    async def _get_json(self, url: str, *, headers: dict[str, str], params: dict[str, Any]) -> dict[str, Any]:
+    async def _get_json(
+        self, url: str, *, headers: dict[str, str], params: dict[str, Any]
+    ) -> dict[str, Any]:
         client = self._require_client()
         r = await client.get(url, headers=headers, params=params)
         r.raise_for_status()
@@ -228,9 +233,7 @@ class FlightsService:
         # Amadeus Flight Offers requires IATA codes and a departure date.
         if not origin_code or not dest_code or departure_date is None:
             est = _mock_estimate(origin_city, destination_city)
-            est.note = (
-                "Mock estimate: provide 3-letter IATA origin/destination and dates for Amadeus quotes."
-            )
+            est.note = "Mock estimate: provide 3-letter IATA origin/destination and dates for Amadeus quotes."
             async with self._cache_lock:
                 self._cache[key] = est
             return FlightLookupResult.success(est)

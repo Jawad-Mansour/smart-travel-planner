@@ -207,7 +207,11 @@ async def classify_destinations(
         predicted_style: str | None = None
         confidence = 0.0
 
-        if svc._model is not None and svc._preprocessor is not None and svc._label_encoder is not None:
+        if (
+            svc._model is not None
+            and svc._preprocessor is not None
+            and svc._label_encoder is not None
+        ):
             try:
                 frame = svc._build_feature_row(
                     activities_text=text,
@@ -255,7 +259,13 @@ async def classify_destinations(
 
         picks = pool.head(top_k)
         out_rows = picks[
-            ["destination_city", "country", "travel_style", "cost_per_day_avg_usd", "flight_cost_usd"]
+            [
+                "destination_city",
+                "country",
+                "travel_style",
+                "cost_per_day_avg_usd",
+                "flight_cost_usd",
+            ]
         ].to_dict(orient="records")
 
         ms = int((time.perf_counter() - t0) * 1000)

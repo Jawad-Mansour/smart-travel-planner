@@ -46,11 +46,11 @@ Rough LLM token costs depend on provider pricing; log usage under `usage_parts` 
 2. Start Postgres: `docker compose up -d postgres` and wait until healthy.
 3. Install deps: `pip install -e ".[dev]"` from repo root.
 4. Run API: `uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000`.
-5. Short query (expect clarification when duration/budget/activities are missing):  
+5. Short query (expect clarification when duration/budget/activities are missing):
    `curl -s -N -X POST http://localhost:8000/api/travel/plan -H "Content-Type: application/json" -d "{\"query\":\"I want to go hiking\"}"`
-6. Full query:  
+6. Full query:
    `curl -s -N -X POST http://localhost:8000/api/travel/plan -H "Content-Type: application/json" -d "{\"query\":\"I have 2 weeks in July, $1500, want warm weather and hiking, not too touristy\"}"`
-7. History:  
+7. History:
    `curl -s http://localhost:8000/api/travel/history -H "X-User-Id: test-user"`
 
 RAG needs embeddings DB and chunk data from your pipeline; without it, RAG tool errors are surfaced in tool JSON but the agent still completes.
