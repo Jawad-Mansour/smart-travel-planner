@@ -28,7 +28,9 @@ CHUNKS_PATH = PROJECT_ROOT / "backend" / "rag" / "data" / "chunks" / "chunks.jso
 
 
 class DatabaseSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore"
+    )
     database_url: str = Field(
         default="postgresql://postgres:postgres@localhost:5432/smart_travel",
         alias="DATABASE_URL",
@@ -53,6 +55,7 @@ class ChunkPayload(BaseModel):
 # LOGGING
 # ============================================================
 
+
 def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -63,6 +66,7 @@ def configure_logging() -> None:
 # ============================================================
 # MODEL LOADING (CACHED)
 # ============================================================
+
 
 @lru_cache(maxsize=1)
 def load_model() -> SentenceTransformer:
@@ -78,15 +82,14 @@ def load_model() -> SentenceTransformer:
 # DATABASE OPERATIONS
 # ============================================================
 
+
 def vector_to_pg_text(embedding: list[float]) -> str:
     """Convert embedding list to PostgreSQL vector string format."""
     return "[" + ",".join(f"{value:.8f}" for value in embedding) + "]"
 
 
 async def get_or_create_document(
-    conn: asyncpg.Connection, 
-    destination: str, 
-    source_url: str
+    conn: asyncpg.Connection, destination: str, source_url: str
 ) -> int:
     """Get existing document ID or create new one."""
     existing_id = await conn.fetchval(
@@ -140,7 +143,7 @@ async def store_chunks(chunks: list[ChunkRecord], settings: DatabaseSettings) ->
     """Store parent and child chunks with embeddings."""
     logger = logging.getLogger(__name__)
     conn = await connect_with_retry(settings.database_url)
-    
+
     try:
         existing_source_ids = await fetch_existing_source_chunk_ids(conn)
         parent_map: dict[int, int] = {}
@@ -154,7 +157,7 @@ async def store_chunks(chunks: list[ChunkRecord], settings: DatabaseSettings) ->
         for parent in tqdm(parent_chunks, desc="Parent chunks"):
             document_id = await get_or_create_document(conn, parent.destination, parent.url)
             metadata = {"source_chunk_id": parent.id, "destination": parent.destination}
-            
+
             row_id = await conn.fetchval(
                 """
                 INSERT INTO chunks (
@@ -178,7 +181,7 @@ async def store_chunks(chunks: list[ChunkRecord], settings: DatabaseSettings) ->
         logger.info(f"Generating embeddings for {len(child_chunks)} child chunks...")
         records_to_insert: list[tuple[Any, ...]] = []
         skipped = 0
-        
+
         for child in tqdm(child_chunks, desc="Child chunks"):
             if child.id in existing_source_ids:
                 skipped += 1
@@ -214,9 +217,11 @@ async def store_chunks(chunks: list[ChunkRecord], settings: DatabaseSettings) ->
                 """,
                 records_to_insert,
             )
-        
-        logger.info(f"Stored {len(records_to_insert)} new child chunks (skipped {skipped} existing)")
-        
+
+        logger.info(
+            f"Stored {len(records_to_insert)} new child chunks (skipped {skipped} existing)"
+        )
+
     finally:
         await conn.close()
 
@@ -225,7 +230,9 @@ async def connect_with_retry(database_url: str) -> asyncpg.Connection:
     async for attempt in AsyncRetrying(
         stop=stop_after_attempt(8),
         wait=wait_fixed(3),
-        retry=retry_if_exception_type((ConnectionError, TimeoutError, OSError, asyncpg.PostgresError)),
+        retry=retry_if_exception_type(
+            (ConnectionError, TimeoutError, OSError, asyncpg.PostgresError)
+        ),
         reraise=True,
     ):
         with attempt:
@@ -237,46 +244,47 @@ async def connect_with_retry(database_url: str) -> asyncpg.Connection:
 # MAIN
 # ============================================================
 
+
 async def run() -> None:
     """Main entry point."""
     configure_logging()
     logger = logging.getLogger(__name__)
-    
+
     logger.info("=" * 50)
     logger.info("PHASE 10B: EMBEDDINGS + VECTOR STORE")
     logger.info("=" * 50)
-    
+
     try:
         # Check if chunks.json exists
         if not CHUNKS_PATH.exists():
             logger.error(f"Chunks file not found: {CHUNKS_PATH}")
             logger.info("Run chunk_documents.py first")
             return
-        
+
         settings = DatabaseSettings()
         payload = ChunkPayload.model_validate_json(CHUNKS_PATH.read_text(encoding="utf-8"))
-        
+
         if not payload.chunks:
             logger.warning("No chunks found in file")
             return
-        
+
         parent_count = sum(1 for c in payload.chunks if c.type == "parent")
         child_count = sum(1 for c in payload.chunks if c.type == "child")
         logger.info(f"Loaded {parent_count} parents, {child_count} children")
-        
+
         await store_chunks(payload.chunks, settings)
-        
+
         logger.info("=" * 50)
         logger.info("✅ Embedding and storage complete")
         logger.info("=" * 50)
-        
+
     except FileNotFoundError as e:
         logger.error(f"File not found: {e}")
         raise
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in chunks file: {e}")
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Fatal error during embedding and storage")
         raise
 

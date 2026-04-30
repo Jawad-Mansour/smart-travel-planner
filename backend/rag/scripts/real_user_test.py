@@ -22,9 +22,7 @@ async def test() -> None:
     service = get_instance()
     await service.startup()
 
-    query = (
-        "I have 2 weeks in July with $1500, want warm weather and hiking"
-    )
+    query = "I have 2 weeks in July with $1500, want warm weather and hiking"
     results = await service.search(query, destination=None, top_k=4)
 
     print("=" * 70)

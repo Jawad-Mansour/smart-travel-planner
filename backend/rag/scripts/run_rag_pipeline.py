@@ -9,12 +9,30 @@ from pathlib import Path
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
 
 PIPELINE_STEPS: list[tuple[str, Path]] = [
-    ("Phase 10A - Setup database", PROJECT_ROOT / "backend" / "rag" / "scripts" / "setup_database.py"),
-    ("Phase 8 - Collect content", PROJECT_ROOT / "backend" / "rag" / "scripts" / "collect_content.py"),
-    ("Phase 9 - Chunk documents", PROJECT_ROOT / "backend" / "rag" / "scripts" / "chunk_documents.py"),
-    ("Phase 10B - Embed and store", PROJECT_ROOT / "backend" / "rag" / "scripts" / "embed_and_store.py"),
-    ("Phase 11 - Test retrieval", PROJECT_ROOT / "backend" / "rag" / "scripts" / "test_retrieval.py"),
-    ("Phase 11b - Relevance suite", PROJECT_ROOT / "backend" / "rag" / "scripts" / "relevance_test.py"),
+    (
+        "Phase 10A - Setup database",
+        PROJECT_ROOT / "backend" / "rag" / "scripts" / "setup_database.py",
+    ),
+    (
+        "Phase 8 - Collect content",
+        PROJECT_ROOT / "backend" / "rag" / "scripts" / "collect_content.py",
+    ),
+    (
+        "Phase 9 - Chunk documents",
+        PROJECT_ROOT / "backend" / "rag" / "scripts" / "chunk_documents.py",
+    ),
+    (
+        "Phase 10B - Embed and store",
+        PROJECT_ROOT / "backend" / "rag" / "scripts" / "embed_and_store.py",
+    ),
+    (
+        "Phase 11 - Test retrieval",
+        PROJECT_ROOT / "backend" / "rag" / "scripts" / "test_retrieval.py",
+    ),
+    (
+        "Phase 11b - Relevance suite",
+        PROJECT_ROOT / "backend" / "rag" / "scripts" / "relevance_test.py",
+    ),
 ]
 
 

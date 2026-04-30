@@ -75,9 +75,24 @@ def evaluate_case(case: RelevanceCase, results: list[dict[str, Any]]) -> tuple[b
 
 # Regexes are intentionally broad to survive varied Wikivoyage wording.
 CASES: tuple[RelevanceCase, ...] = (
-    RelevanceCase("short_hiking_qtown", "hiking", "Queenstown", (r"hik|trail|trek|walk|gondola|route|skyline|ben",)),
-    RelevanceCase("short_beaches_maldives", "beaches", "Maldives", (r"beach|coast|sand|atoll|island|lagoon|swim|dive",)),
-    RelevanceCase("short_temples_kathmandu", "temples", "Kathmandu", (r"temple|shrine|durbar|stupa|monastery|heritage|unesco",)),
+    RelevanceCase(
+        "short_hiking_qtown",
+        "hiking",
+        "Queenstown",
+        (r"hik|trail|trek|walk|gondola|route|skyline|ben",),
+    ),
+    RelevanceCase(
+        "short_beaches_maldives",
+        "beaches",
+        "Maldives",
+        (r"beach|coast|sand|atoll|island|lagoon|swim|dive",),
+    ),
+    RelevanceCase(
+        "short_temples_kathmandu",
+        "temples",
+        "Kathmandu",
+        (r"temple|shrine|durbar|stupa|monastery|heritage|unesco",),
+    ),
     RelevanceCase(
         "medium_hiking_qtown",
         "best hiking trails in Queenstown",
@@ -171,7 +186,9 @@ async def run_all() -> int:
         logger.info("Running %s relevance cases", len(CASES))
         for case in CASES:
             try:
-                results = await service.search(query=case.query, destination=case.destination, top_k=4)
+                results = await service.search(
+                    query=case.query, destination=case.destination, top_k=4
+                )
             except Exception as exc:
                 failed += 1
                 logger.error("CASE FAIL %s: exception %s", case.name, exc)

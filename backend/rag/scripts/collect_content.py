@@ -72,6 +72,7 @@ class FetchResult:
 # LOGGING
 # ============================================================
 
+
 def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -82,6 +83,7 @@ def configure_logging() -> None:
 # ============================================================
 # UTILITIES
 # ============================================================
+
 
 def normalize_destination(destination: str) -> str:
     """Convert destination name to URL-friendly format."""
@@ -97,7 +99,7 @@ def ensure_directories() -> None:
 def extract_clean_markdown(html: str) -> str:
     """Extract readable markdown-like text from HTML."""
     soup = BeautifulSoup(html, "html.parser")
-    
+
     # Remove unwanted elements
     for tag in soup(["script", "style", "nav", "header", "footer", "noscript"]):
         tag.decompose()
@@ -127,6 +129,7 @@ def extract_clean_markdown(html: str) -> str:
 # ============================================================
 # FETCHING
 # ============================================================
+
 
 @retry(
     reraise=True,
@@ -160,7 +163,7 @@ async def fetch_destination(
         url = BASE_URL.format(destination=destination_slug)
         fetched_at = datetime.now(UTC).isoformat()
         logger = logging.getLogger(__name__)
-        
+
         try:
             response = await fetch_page(client, url)
             clean_text = extract_clean_markdown(response.text)
@@ -173,10 +176,7 @@ async def fetch_destination(
             save_result(destination, response.text, clean_text, metadata)
             logger.info("Fetched destination page", extra={"destination": destination, "url": url})
             return FetchResult(
-                destination=destination, 
-                url=url, 
-                status=response.status_code, 
-                fetched_at=fetched_at
+                destination=destination, url=url, status=response.status_code, fetched_at=fetched_at
             )
         except httpx.HTTPError:
             metadata = {
@@ -187,28 +187,26 @@ async def fetch_destination(
                 "error": "fetch_failed_after_retries",
             }
             save_result(destination, "", "", metadata)
-            logger.exception("Failed destination fetch", extra={"destination": destination, "url": url})
-            return FetchResult(
-                destination=destination, 
-                url=url, 
-                status=0, 
-                fetched_at=fetched_at
+            logger.exception(
+                "Failed destination fetch", extra={"destination": destination, "url": url}
             )
+            return FetchResult(destination=destination, url=url, status=0, fetched_at=fetched_at)
 
 
 # ============================================================
 # MAIN
 # ============================================================
 
+
 async def run() -> None:
     """Main entry point."""
     configure_logging()
     logger = logging.getLogger(__name__)
-    
+
     logger.info("=" * 50)
     logger.info("PHASE 8: CONTENT COLLECTION")
     logger.info("=" * 50)
-    
+
     try:
         ensure_directories()
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
@@ -216,22 +214,28 @@ async def run() -> None:
             "User-Agent": "SmartTravelPlannerBot/1.0 (+https://github.com/Jawad-Mansour/smart-travel-planner)",
         }
         timeout = httpx.Timeout(20.0, connect=10.0)
-        
+
         logger.info(f"Fetching {len(DESTINATIONS)} destinations from Wikivoyage...")
-        
-        async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=True) as client:
-            tasks = [fetch_destination(client, destination, semaphore) for destination in DESTINATIONS]
+
+        async with httpx.AsyncClient(
+            headers=headers, timeout=timeout, follow_redirects=True
+        ) as client:
+            tasks = [
+                fetch_destination(client, destination, semaphore) for destination in DESTINATIONS
+            ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            success_count = sum(1 for r in results if isinstance(r, FetchResult) and r.status == 200)
+
+            success_count = sum(
+                1 for r in results if isinstance(r, FetchResult) and r.status == 200
+            )
             fail_count = len(results) - success_count
-            
+
             logger.info(f"Collection complete: {success_count} succeeded, {fail_count} failed")
-            
+
             if fail_count > 0:
                 logger.warning(f"Failed destinations: {fail_count}")
-            
-    except Exception as e:
+
+    except Exception:
         logger.exception("Fatal error during content collection")
         raise
 

@@ -207,8 +207,12 @@ class RAGSettings(BaseSettings):
         default="postgresql://postgres:postgres@localhost:5432/smart_travel",
         alias="DATABASE_URL",
     )
-    relevance_threshold: float = Field(default=RELEVANCE_THRESHOLD_DEFAULT, alias="RAG_RELEVANCE_THRESHOLD")
-    gibberish_raw_score_cap: float = Field(default=GIBBERISH_RAW_SCORE_CAP, alias="RAG_GIBBERISH_RAW_CAP")
+    relevance_threshold: float = Field(
+        default=RELEVANCE_THRESHOLD_DEFAULT, alias="RAG_RELEVANCE_THRESHOLD"
+    )
+    gibberish_raw_score_cap: float = Field(
+        default=GIBBERISH_RAW_SCORE_CAP, alias="RAG_GIBBERISH_RAW_CAP"
+    )
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
 
 
@@ -478,7 +482,9 @@ class RAGService:
             if any(t in h for t in ("beach", "do", "see", "island", "coast", "swim")):
                 mult *= 1.12
         if any(w in q for w in ("temple", "temples", "shrine", "culture")):
-            if any(t in h for t in ("see", "temple", "culture", "museum", "heritage", "understand")):
+            if any(
+                t in h for t in ("see", "temple", "culture", "museum", "heritage", "understand")
+            ):
                 mult *= 1.12
         if any(w in q for w in ("food", "eat", "restaurant", "street food", "cuisine")):
             if any(t in h for t in ("eat", "drink", "food", "restaurant", "cuisine")):
@@ -494,7 +500,9 @@ class RAGService:
                 mult *= 1.12
         return min(mult, 1.25)
 
-    def _apply_heading_boosts(self, query: str, chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    def _apply_heading_boosts(
+        self, query: str, chunks: list[RetrievedChunk]
+    ) -> list[RetrievedChunk]:
         out: list[RetrievedChunk] = []
         for c in chunks:
             boost = self._heading_query_boost(query, c.heading)
@@ -512,7 +520,9 @@ class RAGService:
             )
         return out
 
-    def _penalize_introduction_for_intent(self, query: str, chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    def _penalize_introduction_for_intent(
+        self, query: str, chunks: list[RetrievedChunk]
+    ) -> list[RetrievedChunk]:
         """Demote Introduction when the query asks for specific section content."""
         q = query.lower()
         specific = any(
@@ -604,7 +614,9 @@ class RAGService:
         return [
             RetrievedChunk(
                 id=int(row["id"]),
-                parent_id=int(row["parent_chunk_id"]) if row["parent_chunk_id"] is not None else None,
+                parent_id=int(row["parent_chunk_id"])
+                if row["parent_chunk_id"] is not None
+                else None,
                 content=str(row["content"]),
                 heading=str(row["heading"] or "General"),
                 destination=str(row["destination"] or "Unknown"),
@@ -669,7 +681,9 @@ class RAGService:
         return [
             RetrievedChunk(
                 id=int(row["id"]),
-                parent_id=int(row["parent_chunk_id"]) if row["parent_chunk_id"] is not None else None,
+                parent_id=int(row["parent_chunk_id"])
+                if row["parent_chunk_id"] is not None
+                else None,
                 content=str(row["content"]),
                 heading=str(row["heading"] or "General"),
                 destination=str(row["destination"] or "Unknown"),
@@ -881,7 +895,9 @@ class RAGService:
             vector_kept = len(above)
             tokens = self._tokenize_for_keywords(expanded)
             kw = await self._keyword_search(tokens, destination, limit=40)
-            kw = self._penalize_introduction_for_intent(expanded, self._apply_heading_boosts(expanded, kw))
+            kw = self._penalize_introduction_for_intent(
+                expanded, self._apply_heading_boosts(expanded, kw)
+            )
             merged = self._merge_dedupe_chunks(above, kw)
             above = self._filter_by_relevance(merged, threshold, expanded)
             self.logger.info(
@@ -902,8 +918,10 @@ class RAGService:
 
         diversified = self._apply_mmr(above, lambda_param=lambda_param, top_k=top_k)
 
-        use_diversity = multi_destination_diversity if multi_destination_diversity is not None else (
-            destination is None
+        use_diversity = (
+            multi_destination_diversity
+            if multi_destination_diversity is not None
+            else (destination is None)
         )
         if use_diversity:
             parent_ids_ordered, parent_scores = self._order_parent_ids_diverse_destinations(

@@ -244,9 +244,7 @@ async def run() -> None:
                     }
                 )
 
-        verification_errors.extend(
-            await run_critical_checks(service, logger, relevance_threshold)
-        )
+        verification_errors.extend(await run_critical_checks(service, logger, relevance_threshold))
 
         success_count = sum(1 for r in results_summary if r.get("success", False))
         logger.info("")

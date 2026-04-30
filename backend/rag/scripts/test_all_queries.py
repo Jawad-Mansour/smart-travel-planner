@@ -1,4 +1,4 @@
-﻿"""
+"""
 Run many query types against RAG (smoke). Uses project-root import path (host or Docker).
 
 Run from repo root:
@@ -64,7 +64,11 @@ async def test() -> None:
                 preview = str(r["content"])[:100].replace("\n", " ")
                 print(f"      -> {r['destination']} | {r['heading']}: {preview}...")
         else:
-            note = " (likely gibberish or below relevance threshold)" if "gibberish" in query.lower() or "xyzabc" in query.lower() else ""
+            note = (
+                " (likely gibberish or below relevance threshold)"
+                if "gibberish" in query.lower() or "xyzabc" in query.lower()
+                else ""
+            )
             print(f"   No results{note}")
 
     await service.shutdown()

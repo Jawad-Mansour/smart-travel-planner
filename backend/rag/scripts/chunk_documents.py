@@ -45,6 +45,7 @@ OUTDOOR_ADVENTURE_SLUGS: frozenset[str] = frozenset(
 # MODELS
 # ============================================================
 
+
 class ChunkRecord(BaseModel):
     """
     Parent-child chunking: parents are full sections (type parent, no parent_id).
@@ -69,6 +70,7 @@ class ChunkOutput(BaseModel):
 # LOGGING
 # ============================================================
 
+
 def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -80,6 +82,7 @@ def configure_logging() -> None:
 # CHUNKING UTILITIES
 # ============================================================
 
+
 def split_sentences(text: str) -> list[str]:
     """
     Split text into sentences.
@@ -87,16 +90,16 @@ def split_sentences(text: str) -> list[str]:
     """
     rough_sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     sentences: list[str] = []
-    
+
     for sentence in rough_sentences:
         cleaned = sentence.strip()
         if not cleaned:
             continue
-        
+
         if len(cleaned) <= 500:
             sentences.append(cleaned)
             continue
-        
+
         # Long sentence fallback: split by clauses (semicolon/comma)
         clauses = [clause.strip() for clause in re.split(r"[;,]\s+", cleaned) if clause.strip()]
         if clauses:
@@ -106,7 +109,7 @@ def split_sentences(text: str) -> list[str]:
             remainder = cleaned[500:].strip()
             if remainder:
                 sentences.append(remainder)
-    
+
     return sentences
 
 
@@ -139,7 +142,7 @@ def parse_sections(text: str) -> list[tuple[str, str]]:
         content = "\n".join(section_lines).strip()
         if content:
             normalized.append((section_heading, content))
-    
+
     return normalized
 
 
@@ -189,7 +192,7 @@ def build_chunks_for_destination(clean_file: Path, next_id: int) -> tuple[list[C
     """
     destination_slug = clean_file.stem
     destination = destination_slug.replace("_", " ").title()
-    
+
     # Load metadata for URL
     metadata_path = META_DIR / f"{destination_slug}.json"
     url = ""
@@ -237,29 +240,30 @@ def build_chunks_for_destination(clean_file: Path, next_id: int) -> tuple[list[C
 # MAIN
 # ============================================================
 
+
 def run() -> None:
     """Main entry point."""
     configure_logging()
     logger = logging.getLogger(__name__)
-    
+
     logger.info("=" * 50)
     logger.info("PHASE 9: CHUNKING DOCUMENTS")
     logger.info("=" * 50)
-    
+
     try:
         OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        
+
         all_chunks: list[ChunkRecord] = []
         current_id = 1
-        
+
         clean_files = sorted(CLEAN_DIR.glob("*.md"))
         if not clean_files:
             logger.warning(f"No .md files found in {CLEAN_DIR}")
             logger.info("Run collect_content.py first")
             return
-        
+
         logger.info(f"Found {len(clean_files)} cleaned documents")
-        
+
         for clean_file in clean_files:
             destination_chunks, current_id = build_chunks_for_destination(clean_file, current_id)
             all_chunks.extend(destination_chunks)
@@ -268,25 +272,25 @@ def run() -> None:
             logger.info(
                 f"Chunked {clean_file.name}: {parent_count} parents, {child_count} children"
             )
-        
+
         payload = ChunkOutput(chunks=all_chunks)
         OUTPUT_PATH.write_text(payload.model_dump_json(indent=2), encoding="utf-8")
-        
+
         total_parents = sum(1 for c in all_chunks if c.type == "parent")
         total_children = sum(1 for c in all_chunks if c.type == "child")
-        
+
         logger.info("=" * 50)
-        logger.info(f"✅ Chunking complete")
+        logger.info("✅ Chunking complete")
         logger.info(f"   Total parents: {total_parents}")
         logger.info(f"   Total children: {total_children}")
         logger.info(f"   Output: {OUTPUT_PATH}")
         logger.info("=" * 50)
-        
+
     except FileNotFoundError as e:
         logger.error(f"File not found: {e}")
         logger.info("Run collect_content.py first")
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Fatal error during chunking")
         raise
 
