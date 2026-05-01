@@ -46,7 +46,10 @@ class IntentExtractor:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._client = AsyncOpenAI(api_key=settings.openai_api_key or "dummy")
+        _kw: dict[str, Any] = {"api_key": settings.openai_api_key or "dummy"}
+        if settings.openai_base_url and str(settings.openai_base_url).strip():
+            _kw["base_url"] = str(settings.openai_base_url).strip().rstrip("/")
+        self._client = AsyncOpenAI(**_kw)
 
     async def extract(self, user_query: str) -> tuple[IntentResult, dict[str, Any]]:
         """

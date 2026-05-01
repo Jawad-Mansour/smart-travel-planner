@@ -297,6 +297,17 @@ class RAGService:
             lambda: self.model.encode(text, normalize_embeddings=True).tolist(),
         )
 
+    async def embed_text_prefix(
+        self, text: str, *, max_chars: int = 2000, head_dims: int = 10
+    ) -> list[float]:
+        """Public helper for analytics UI: first ``head_dims`` values of the query embedding."""
+        await self.startup()
+        snippet = (text or "").strip()[:max_chars]
+        if not snippet:
+            return []
+        vec = await self._embed(snippet)
+        return [float(x) for x in vec[:head_dims]]
+
     def _query_has_travel_signals(self, query: str) -> bool:
         ql = query.lower()
         return any(sig in ql for sig in TRAVEL_SIGNAL_SUBSTRINGS)

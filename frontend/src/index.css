@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+@keyframes logoGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px rgb(16 185 129 / 0.45));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgb(20 184 166 / 0.85));
+  }
+}
+
+@keyframes stpFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes msgIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg-enter {
+  animation: msgIn 0.22s ease-out both;
+}
+
+.glowing-logo {
+  animation: logoGlow 3s ease-in-out infinite;
+}
+
+/* Matches main chat shell (#f9fafb) + soft emerald orbits */
+.auth-gradient-bg {
+  background-color: #f9fafb;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 15% -10%, rgba(16, 185, 129, 0.12), transparent 45%),
+    radial-gradient(ellipse 100% 70% at 95% 105%, rgba(20, 184, 166, 0.1), transparent 42%),
+    radial-gradient(ellipse 80% 50% at 50% 50%, rgba(241, 245, 249, 0.9), transparent 70%);
+}
+
+.bg-stp-app {
+  background-color: #f9fafb;
+}
+
+@layer components {
+  .btn-primary {
+    @apply rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:scale-[1.02] active:scale-[0.98];
+  }
+  .btn-secondary {
+    @apply rounded-full border border-slate-200 bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 hover:scale-[1.01] active:scale-[0.99];
+  }
+  .btn-danger {
+    @apply rounded-full bg-red-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 hover:scale-[1.02] active:scale-[0.98];
+  }
+  .btn-icon-muted {
+    @apply flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200/90 bg-white/80 text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900;
+  }
+  .btn-social {
+    @apply flex cursor-not-allowed items-center justify-center gap-2 rounded-full border border-slate-200/90 bg-white/50 py-2.5 text-sm font-medium text-slate-500 opacity-70;
+  }
+}

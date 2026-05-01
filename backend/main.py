@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI
+import structlog
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from backend.app.api.routes.auth import router as auth_router
+from backend.app.api.routes.chat import router as chat_router
+from backend.app.api.routes.sessions import router as sessions_router
 from backend.app.api.routes.travel import router as travel_router
 from backend.app.core.config import get_settings
 from backend.app.core.logging import configure_logging
@@ -79,9 +85,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api")
+app.include_router(sessions_router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
 app.include_router(travel_router, prefix="/api")
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    """Log unexpected errors (HTTPException and validation errors use more specific handlers)."""
+    log = structlog.get_logger("api")
+    log.exception("unhandled_exception", path=str(request.url.path))
+    detail = str(exc) if _settings.debug else "Internal server error"
+    return JSONResponse(status_code=500, content={"detail": detail})
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/meta")
+async def public_meta() -> dict[str, Any]:
+    """Static dataset stats for the UI (aligned with ingest notebook)."""
+    return {
+        "rag": {
+            "destination_count": 25,
+            "parent_chunks": 1184,
+            "child_chunks": 20047,
+            "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            "embedding_dims": 384,
+        },
+        "ml_classifier": {
+            "destinations_trained": 155,
+            "styles": ["Adventure", "Culture", "Budget", "Luxury", "Family", "Relaxation"],
+            "test_f1": 0.894,
+        },
+    }

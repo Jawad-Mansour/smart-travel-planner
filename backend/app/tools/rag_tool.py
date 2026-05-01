@@ -34,11 +34,17 @@ async def rag_search(
         else:
             rows = await rag.search_all_destinations(query.strip(), top_k=top_k)
         ms = int((time.perf_counter() - t0) * 1000)
+        emb_head: list[float] = []
+        try:
+            emb_head = await rag.embed_text_prefix(query.strip())
+        except Exception:
+            emb_head = []
         payload = {
             "chunks": rows,
             "duration_ms": ms,
             "query": query.strip(),
             "destination": destination,
+            "query_embedding_preview": emb_head,
         }
         logger.info("tool.rag_search.ok", n=len(rows), ms=ms)
         return ToolEnvelope(ok=True, tool=tool_name, payload=payload, error=None)

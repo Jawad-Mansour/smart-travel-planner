@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any
 
+import structlog
 from fastapi import APIRouter, Depends
+from pydantic import ValidationError
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +22,7 @@ from backend.app.db.models import AgentRun, ToolCall
 from backend.app.schemas.intent import IntentResult
 
 router = APIRouter(prefix="/travel", tags=["travel"])
+_log = structlog.get_logger(__name__)
 
 
 @router.post("/plan")
@@ -39,51 +42,66 @@ async def plan_travel(
         return StreamingResponse(err_gen(), media_type="text/event-stream")
 
     async def event_gen():
-        result = await run_travel_agent(settings, q)
-        answer = result.get("answer") or ""
-        usage = result.get("usage_parts") or []
-        raw_intent = result.get("intent")
-        intent_obj = (
-            IntentResult.model_validate(raw_intent)
-            if isinstance(raw_intent, dict)
-            else IntentResult()
-        )
-        missing = sorted(set(intent_obj.critical_missing()) | set(intent_obj.missing_fields))
-        is_clarification = bool(result.get("clarification"))
-        payload = {
-            "answer": answer,
-            "usage": usage,
-            "intent": raw_intent,
-            "needs_clarification": bool(missing) and is_clarification,
-            "missing_fields": missing if is_clarification else [],
-        }
-        yield "data: " + json.dumps(payload, default=str) + "\n\n"
+        try:
+            result = await run_travel_agent(settings, q)
+            answer = result.get("answer") or ""
+            usage = result.get("usage_parts") or []
+            raw_intent = result.get("intent")
+            try:
+                intent_obj = (
+                    IntentResult.model_validate(raw_intent)
+                    if isinstance(raw_intent, dict)
+                    else IntentResult()
+                )
+            except ValidationError:
+                intent_obj = IntentResult()
+            missing = sorted(set(intent_obj.critical_missing()) | set(intent_obj.missing_fields))
+            is_clarification = bool(result.get("clarification"))
+            payload = {
+                "answer": answer,
+                "usage": usage,
+                "intent": raw_intent,
+                "needs_clarification": bool(missing) and is_clarification,
+                "missing_fields": missing if is_clarification else [],
+            }
+            yield "data: " + json.dumps(payload, default=str) + "\n\n"
 
-        tools_blob = (
-            result.get("tool_results") if isinstance(result.get("tool_results"), dict) else {}
-        )
-        orch_ms = tools_blob.get("orchestration_ms") if isinstance(tools_blob, dict) else None
-
-        run = AgentRun(
-            user_sub=user_sub,
-            query=q,
-            intent_json=result.get("intent"),
-            answer=answer,
-            usage_json={"parts": usage, "tool_summary": True},
-        )
-        session.add(run)
-        await session.flush()
-
-        session.add(
-            ToolCall(
-                run_id=run.id,
-                tool_name="orchestrate_parallel",
-                input_json={"query": q},
-                output_json=tools_blob,
-                duration_ms=orch_ms if isinstance(orch_ms, int) else None,
+            tools_blob = (
+                result.get("tool_results") if isinstance(result.get("tool_results"), dict) else {}
             )
-        )
-        await session.commit()
+            orch_ms = tools_blob.get("orchestration_ms") if isinstance(tools_blob, dict) else None
+
+            run = AgentRun(
+                user_sub=user_sub,
+                query=q,
+                intent_json=result.get("intent"),
+                answer=answer,
+                usage_json={"parts": usage, "tool_summary": True},
+            )
+            session.add(run)
+            await session.flush()
+
+            session.add(
+                ToolCall(
+                    run_id=run.id,
+                    tool_name="orchestrate_parallel",
+                    input_json={"query": q},
+                    output_json=tools_blob,
+                    duration_ms=orch_ms if isinstance(orch_ms, int) else None,
+                )
+            )
+            await session.commit()
+        except Exception as exc:
+            _log.exception("travel_plan_failed", error=str(exc))
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            yield (
+                "data: "
+                + json.dumps({"error": "plan_failed", "message": "Could not complete plan."})
+                + "\n\n"
+            )
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 

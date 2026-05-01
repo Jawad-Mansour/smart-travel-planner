@@ -50,4 +50,6 @@ class IntentResult(BaseModel):
             needed.append("budget")
         if not self.activities:
             needed.append("activities")
+        if not (self.timing_or_season or "").strip():
+            needed.append("preferred_month")
         return needed

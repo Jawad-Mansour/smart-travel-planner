@@ -94,17 +94,23 @@ def _infer_style_keyword(text: str) -> str:
         "Food": 0,
     }
     for k in ("hike", "trek", "ski", "adventure", "outdoor", "diving", "bungee"):
-        scores["Adventure"] += 2
+        if k in t:
+            scores["Adventure"] += 2
     for k in ("museum", "history", "cathedral", "art", "architecture"):
-        scores["Culture"] += 2
+        if k in t:
+            scores["Culture"] += 2
     for k in ("luxury", "resort", "spa", "honeymoon"):
-        scores["Luxury"] += 2
+        if k in t:
+            scores["Luxury"] += 2
     for k in ("relax", "beach", "wellness", "yoga"):
-        scores["Relax"] += 2
+        if k in t:
+            scores["Relax"] += 2
     for k in ("family", "kids"):
-        scores["Family"] += 2
+        if k in t:
+            scores["Family"] += 2
     for k in ("food", "restaurant", "street food", "wine"):
-        scores["Food"] += 2
+        if k in t:
+            scores["Food"] += 2
     best = max(scores, key=scores.get)
     return best if scores[best] > 0 else "Culture"
 
@@ -269,11 +275,14 @@ async def classify_destinations(
         ].to_dict(orient="records")
 
         ms = int((time.perf_counter() - t0) * 1000)
+        boosts = _keyword_boosts(text)
+        boost_keys = sorted(boosts.keys(), key=lambda k: float(boosts[k]), reverse=True)[:3]
         payload = {
             "travel_style": predicted_style,
             "confidence": round(confidence, 4),
             "destinations": out_rows,
             "duration_ms": ms,
+            "signal_features": boost_keys,
         }
         logger.info("tool.classify_destinations.ok", style=predicted_style, n=len(out_rows))
         return ToolEnvelope(ok=True, tool=tool_name, payload=payload, error=None)

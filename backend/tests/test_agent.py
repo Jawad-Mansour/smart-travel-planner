@@ -13,11 +13,23 @@ def test_intent_critical_missing_covers_duration_budget_activities() -> None:
         duration_days=None,
         budget_usd=1200.0,
         activities=["hiking"],
+        timing_or_season="October",
     )
     miss = intent.critical_missing()
     assert "duration" in miss
     assert "budget" not in miss
     assert "activities" not in miss
+    assert "preferred_month" not in miss
+
+
+def test_intent_critical_missing_includes_preferred_month_when_timing_absent() -> None:
+    intent = IntentResult(
+        duration_days=7,
+        budget_usd=1500.0,
+        activities=["hiking"],
+        timing_or_season=None,
+    )
+    assert "preferred_month" in intent.critical_missing()
 
 
 @pytest.mark.asyncio

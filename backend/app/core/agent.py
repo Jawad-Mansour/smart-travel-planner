@@ -435,14 +435,25 @@ def _render_structured_markdown(
 
 def _configure_langsmith_env(settings: Settings) -> None:
     """
-    Bridge LANGCHAIN_* env vars to LANGSMITH_* for `langsmith.traceable`.
+    Ensure LangSmith / LangChain tracing env vars are visible to ``langsmith.traceable``
+    (Settings may load from ``.env`` without populating ``os.environ``).
     """
-    if settings.langchain_tracing_v2 and "LANGSMITH_TRACING" not in os.environ:
+    tracing_on = bool(settings.langchain_tracing_v2 or settings.langsmith_tracing)
+    if tracing_on:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGSMITH_TRACING"] = "true"
-    if settings.langchain_api_key and "LANGSMITH_API_KEY" not in os.environ:
-        os.environ["LANGSMITH_API_KEY"] = settings.langchain_api_key
-    if settings.langchain_project and "LANGSMITH_PROJECT" not in os.environ:
-        os.environ["LANGSMITH_PROJECT"] = settings.langchain_project
+    key = settings.langsmith_api_key or settings.langchain_api_key
+    if key:
+        os.environ["LANGSMITH_API_KEY"] = key
+    proj = settings.langsmith_project or settings.langchain_project
+    if proj:
+        os.environ["LANGSMITH_PROJECT"] = proj
+    if settings.langchain_api_key:
+        os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
+    if settings.langchain_project:
+        os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
+    if settings.langsmith_endpoint:
+        os.environ["LANGSMITH_ENDPOINT"] = settings.langsmith_endpoint
 
 
 class TravelAgentGraph:
@@ -450,7 +461,10 @@ class TravelAgentGraph:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._client = AsyncOpenAI(api_key=settings.openai_api_key or "dummy")
+        _kw: dict[str, Any] = {"api_key": settings.openai_api_key or "dummy"}
+        if settings.openai_base_url and str(settings.openai_base_url).strip():
+            _kw["base_url"] = str(settings.openai_base_url).strip().rstrip("/")
+        self._client = AsyncOpenAI(**_kw)
 
     def compile(self):
         g = StateGraph(dict)
@@ -480,7 +494,7 @@ class TravelAgentGraph:
     def _route_after_intent(self, state: dict[str, Any]) -> Literal["clarify", "tools"]:
         intent = IntentResult.model_validate(state.get("intent", {}))
         missing = set(intent.critical_missing()) | set(intent.missing_fields)
-        critical = {"duration", "budget", "activities"}
+        critical = {"duration", "budget", "activities", "preferred_month"}
         if critical & missing:
             return "clarify"
         return "tools"
@@ -555,7 +569,6 @@ class TravelAgentGraph:
         if not q:
             parts = [", ".join(intent.activities or []), intent.destination_hint or ""]
             q = " ".join([p for p in parts if p]).strip() or "travel recommendations"
-        activities_text = ", ".join(intent.activities) if intent.activities else q[:400]
 
         t0 = time.perf_counter()
         cls_task = classify_destinations(

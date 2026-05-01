@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change-me-jwt-secret", alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_expiry_minutes: int = Field(default=60, alias="JWT_EXPIRY_MINUTES")
+    jwt_access_expire_minutes: int = Field(default=30, alias="JWT_ACCESS_EXPIRE_MINUTES")
+    jwt_refresh_expire_days: int = Field(default=14, alias="JWT_REFRESH_EXPIRE_DAYS")
 
     database_url: str = Field(
         default="postgresql+asyncpg://postgres:postgres@localhost:5432/travel_planner",
@@ -56,7 +58,7 @@ class Settings(BaseSettings):
 
     amadeus_api_key: str | None = Field(default=None, alias="AMADEUS_API_KEY")
     amadeus_api_secret: str | None = Field(default=None, alias="AMADEUS_API_SECRET")
-    flights_cache_ttl_seconds: int = Field(default=1800, alias="FLIGHTS_CACHE_TTL_SECONDS")
+    flights_cache_ttl_seconds: int = Field(default=3600, alias="FLIGHTS_CACHE_TTL_SECONDS")
 
     exchange_rate_api_key: str | None = Field(default=None, alias="EXCHANGE_RATE_API_KEY")
     fx_cache_ttl_seconds: int = Field(default=3600, alias="FX_CACHE_TTL_SECONDS")
@@ -72,9 +74,15 @@ class Settings(BaseSettings):
 
     frontend_url: str = Field(default="http://localhost:5173", alias="FRONTEND_URL")
     cors_allowed_origins: str = Field(
-        default="http://localhost:5173",
+        default=(
+            "http://localhost:5173,http://127.0.0.1:5173,"
+            "http://localhost,http://127.0.0.1,"
+            "http://localhost:80,http://127.0.0.1:80,"
+            "http://localhost:8080,http://127.0.0.1:8080,"
+            "http://localhost:3000,http://127.0.0.1:3000"
+        ),
         alias="CORS_ALLOWED_ORIGINS",
-        description="Comma-separated origins",
+        description="Comma-separated browser origins (local dev + Docker UI)",
     )
 
     ml_models_dir: Path = Field(
@@ -87,6 +95,18 @@ class Settings(BaseSettings):
     )
 
     default_flight_origin: str = Field(default="NYC", alias="DEFAULT_FLIGHT_ORIGIN")
+
+    discord_webhook_url: str | None = Field(default=None, alias="DISCORD_WEBHOOK_URL")
+    slack_webhook_url: str | None = Field(default=None, alias="SLACK_WEBHOOK_URL")
+
+    # Optional: email the signed-in user when a full plan is ready (SMTP).
+    smtp_host: str = Field(default="", alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_user: str = Field(default="", alias="SMTP_USER")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_from: str = Field(default="", alias="SMTP_FROM")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
     rag_relevance_threshold: float = Field(default=0.48, alias="RAG_RELEVANCE_THRESHOLD")
     rag_gibberish_raw_cap: float = Field(default=0.4, alias="RAG_GIBBERISH_RAW_CAP")
 
