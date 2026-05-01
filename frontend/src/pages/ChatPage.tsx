@@ -27,18 +27,24 @@ export function ChatPage() {
   const [mainView, setMainView] = useState<InfoView>("chat");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lastAnalysis, setLastAnalysis] = useState<StreamAnalysis | null>(null);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
   const loadSessions = useCallback(async () => {
+    setSessionsLoading(true);
     try {
-      const s = await listSessions();
-      setSessions(s);
-    } catch {
-      const ok = await refreshAccess();
-      if (ok) {
-        setSessions(await listSessions());
-      } else {
-        logout();
+      try {
+        const s = await listSessions();
+        setSessions(s);
+      } catch {
+        const ok = await refreshAccess();
+        if (ok) {
+          setSessions(await listSessions());
+        } else {
+          logout();
+        }
       }
+    } finally {
+      setSessionsLoading(false);
     }
   }, [logout, refreshAccess]);
 
@@ -110,6 +116,7 @@ export function ChatPage() {
 
       <Sidebar
         sessions={sessions}
+        sessionsLoading={sessionsLoading}
         activeId={activeId}
         mainView={mainView}
         mobileOpen={mobileMenuOpen}
@@ -127,7 +134,8 @@ export function ChatPage() {
         {mainView === "chat" ? (
           <ChatPanel
             sessionId={activeId}
-            initialMessages={messages}
+            messages={messages}
+            setMessages={setMessages}
             chatTitle={chatTitle}
             mobileHeader={<SidebarMobileTrigger onClick={() => setMobileMenuOpen(true)} />}
             onSessionResolved={(id) => {

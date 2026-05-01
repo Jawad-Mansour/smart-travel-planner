@@ -204,7 +204,7 @@ class RAGSettings(BaseSettings):
         extra="ignore",
     )
     database_url: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/smart_travel",
+        default="postgresql://postgres:postgres@localhost:5432/travel_planner",
         alias="DATABASE_URL",
     )
     relevance_threshold: float = Field(
@@ -329,6 +329,12 @@ class RAGService:
             return True
         cap = self.settings.gibberish_raw_score_cap
         if len(raw_vector_top_scores) >= 3 and max(raw_vector_top_scores) < cap:
+            if self._query_has_travel_signals(q):
+                self.logger.info(
+                    "Low vector similarity but travel-like query; continuing to keyword merge",
+                    extra={"max_raw": max(raw_vector_top_scores), "cap": cap},
+                )
+                return False
             self.logger.info(
                 "Gibberish: top raw vector scores below cap",
                 extra={"max_raw": max(raw_vector_top_scores), "cap": cap},
@@ -872,6 +878,7 @@ class RAGService:
         lambda_param: float = 0.5,
         *,
         multi_destination_diversity: Optional[bool] = None,
+        _scoped_retry_done: bool = False,
     ) -> list[dict[str, Any]]:
         """
         Search child embeddings; return parent sections only (full context for Agent).
@@ -925,6 +932,19 @@ class RAGService:
             )
 
         if not above:
+            if destination and not _scoped_retry_done:
+                self.logger.warning(
+                    "rag.search.empty_scoped_retrying_all_destinations",
+                    extra={"destination": destination, "query_preview": query[:80]},
+                )
+                return await self.search(
+                    query,
+                    None,
+                    top_k,
+                    lambda_param,
+                    multi_destination_diversity=True,
+                    _scoped_retry_done=True,
+                )
             self.logger.warning(
                 "No child chunks above relevance threshold",
                 extra={"query": query[:80], "destination": destination, "threshold": threshold},

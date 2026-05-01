@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     smtp_from: str = Field(default="", alias="SMTP_FROM")
     smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
     smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
+
+    # Pause between SSE destination segments (seconds). Lower for dev: CHAT_SEGMENT_PAUSE_SEC=0.35
+    chat_segment_pause_seconds: float = Field(
+        default=5.0, alias="CHAT_SEGMENT_PAUSE_SEC", ge=0.0, le=30.0
+    )
     rag_relevance_threshold: float = Field(default=0.48, alias="RAG_RELEVANCE_THRESHOLD")
     rag_gibberish_raw_cap: float = Field(default=0.4, alias="RAG_GIBBERISH_RAW_CAP")
 

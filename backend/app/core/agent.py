@@ -27,7 +27,8 @@ except Exception:  # pragma: no cover - optional tracing fallback
 
 
 from backend.app.core.config import Settings
-from backend.app.schemas.intent import IntentResult
+from backend.app.core.country_flags import resolve_destination_flag
+from backend.app.schemas.intent import IntentResult, merge_context_patch_into_intent
 from backend.app.services.flights_service import get_flights_service
 from backend.app.services.fx_service import get_fx_service
 from backend.app.services.intent_extractor import IntentExtractor
@@ -51,6 +52,7 @@ Then ONE short intro paragraph that restates the user's actual numbers and prefe
 
 3. For EACH destination you MUST include, in order:
    - A heading line: "### [Number]. [Destination Name], [Country] [emoji flag for country]"
+   - flag_emoji must be the Unicode regional-indicator pair for that country (e.g. 🇯🇵 for Japan, 🇫🇷 for France). Never use 🌍 when country is a real sovereign state.
    - "**Why it matches YOUR preferences:**" with 3-4 bullet points that EXPLICITLY quote the user's constraints:
      * Their total budget and/or per-day budget ("fits your $X total / $Y per day" or "would exceed your $Y/day ⚠️")
      * Their duration ("for your N-day trip")
@@ -85,7 +87,7 @@ Pick a winner, explain why in 2-4 sentences, and name trade-offs (e.g. if anothe
 - "Travelers seeking value-for-money options matching your request."
 Every bullet must be destination-specific and user-specific.
 
-9. Use tool JSON below for costs, weather, and destination facts. If a tool failed, say so briefly and still give reasoned estimates marked as approximate.
+9. Use tool JSON for costs, weather, and classifier facts. When **plain-text RAG excerpts** appear in the user message before the JSON (retrieved guide passages), you MUST weave at least one concrete, accurate detail from those excerpts into each destination (\"Why it matches\" or \"Best for\"—paraphrase faithfully; do not invent quotes). If no RAG excerpts are present or RAG returned no chunks, say briefly that color comes from live tools and general knowledge. If a tool failed, note it briefly and still give reasoned estimates marked as approximate.
 
 SPECIAL CASE — user names ONE primary place (e.g. "hiking in Kathmandu" with no "where should I go"):
 - "### 1." is that place with FULL sections above.
@@ -113,7 +115,10 @@ SYNTHESIS_JSON_SCHEMA: dict[str, Any] = {
                     "properties": {
                         "name": {"type": "string"},
                         "country": {"type": "string"},
-                        "flag_emoji": {"type": "string"},
+                        "flag_emoji": {
+                            "type": "string",
+                            "description": "Regional-indicator flag for country (e.g. 🇨🇦), not 🌍",
+                        },
                         "why_matches": {
                             "type": "array",
                             "minItems": 3,
@@ -307,7 +312,7 @@ def _fallback_destinations_from_tools(
             {
                 "name": city or "Recommended destination",
                 "country": country,
-                "flag_emoji": "🌍",
+                "flag_emoji": resolve_destination_flag(None, country),
                 "why_matches": [
                     f"Matches your {activities} focus for this trip.",
                     f"Fits your {month_label} timing and preference for {temp_pref} conditions.",
@@ -379,7 +384,8 @@ def _render_structured_markdown(
         d = raw if isinstance(raw, dict) else {}
         name = _normalize_line(str(d.get("name") or f"Option {i}"))
         country = _normalize_line(str(d.get("country") or ""))
-        flag = _normalize_line(str(d.get("flag_emoji") or ""))
+        flag_raw = str(d.get("flag_emoji") or "").strip() or None
+        flag = resolve_destination_flag(flag_raw, country)
         daily = _enforce_daily_budget_line(
             str(d.get("daily_budget_line") or "Daily budget: estimate unavailable"),
             user_budget_per_day,
@@ -431,6 +437,161 @@ def _render_structured_markdown(
         rec_body = f"{top_name}, {top_country} is the strongest overall fit for your constraints."
     lines.append(f"**{rec_title}** {rec_body}".strip())
     return "\n".join(lines).strip()
+
+
+def _compact_rag_query(user_query: str, intent: IntentResult) -> str:
+    """Intent-enriched, length-capped query so embeddings are not dominated by long chat headers."""
+    u = (user_query or "").strip()
+    if len(u) > 1200:
+        u = f"{u[:1197]}…"
+    bits: list[str] = []
+    if intent.destination_hint:
+        bits.append(str(intent.destination_hint).strip())
+    if intent.activities:
+        bits.append(", ".join(intent.activities))
+    if intent.timing_or_season:
+        bits.append(str(intent.timing_or_season).strip())
+    if intent.comparison_places:
+        bits.append(" vs ".join(intent.comparison_places))
+    glue = " · ".join(bits)
+    if glue and u:
+        return f"{u}\n{glue}"
+    return u or glue or "travel planning"
+
+
+_RAG_COUNTRY_TAIL: frozenset[str] = frozenset(
+    {
+        "portugal",
+        "spain",
+        "france",
+        "italy",
+        "greece",
+        "germany",
+        "austria",
+        "netherlands",
+        "belgium",
+        "switzerland",
+        "poland",
+        "czech republic",
+        "czechia",
+        "uk",
+        "united kingdom",
+        "usa",
+        "u.s.a.",
+        "united states",
+        "canada",
+        "mexico",
+        "japan",
+        "china",
+        "thailand",
+        "vietnam",
+        "indonesia",
+        "australia",
+        "new zealand",
+        "brazil",
+        "argentina",
+        "chile",
+        "peru",
+        "colombia",
+        "south africa",
+        "egypt",
+        "morocco",
+        "turkey",
+        "croatia",
+        "norway",
+        "sweden",
+        "denmark",
+        "ireland",
+        "finland",
+        "hungary",
+        "romania",
+        "bulgaria",
+        "slovenia",
+        "slovakia",
+        "estonia",
+        "latvia",
+        "iceland",
+        "malta",
+        "cyprus",
+        "luxembourg",
+        "monaco",
+        "andorra",
+        "liechtenstein",
+        "scotland",
+        "england",
+        "wales",
+        "ireland",
+    }
+)
+
+
+def _rag_destination_for_search(intent: IntentResult) -> str | None:
+    """
+    When set, RAG vector search is filtered to one guide's ``metadata.destination``.
+    Use ``None`` for multi-city / compare queries so we search the whole corpus
+    (many cities in the repo are not ingested; scoping to e.g. Porto would return zero rows).
+    """
+    places = [str(p).strip() for p in (intent.comparison_places or []) if str(p).strip()]
+    if len(places) >= 2:
+        return None
+    hint = (intent.destination_hint or "").strip()
+    if not hint:
+        return None
+    low = hint.lower()
+    padded = f" {low} "
+    if " vs " in low or " versus " in low or " compare " in padded or " compared " in padded:
+        return None
+    if " between " in padded and len(places) >= 2:
+        return None
+
+    parts = [p.strip() for p in hint.split(",") if p.strip()]
+    if len(parts) >= 2:
+        second = parts[1].lower().strip(".")
+        if second in _RAG_COUNTRY_TAIL or second.endswith(" republic"):
+            return parts[0].split("(")[0].strip() or None
+        return None
+
+    first = hint.split(",")[0].strip().split("(")[0].strip()
+    return first or None
+
+
+def _rag_digest_for_synthesis(
+    tool_results: dict[str, Any], *, max_chars: int = 6500, max_blocks: int = 10
+) -> str:
+    """Plain-text digest so the synthesis model reliably attends to RAG, not only buried JSON."""
+    raw = tool_results.get("rag")
+    if not isinstance(raw, dict) or raw.get("ok") is not True:
+        return ""
+    payload = raw.get("payload")
+    if not isinstance(payload, dict):
+        return ""
+    chunks = payload.get("chunks")
+    if not isinstance(chunks, list) or not chunks:
+        return ""
+    intro = (
+        "RAG travel-guide excerpts (use concrete facts in your bullets; paraphrase faithfully):\n"
+    )
+    blocks: list[str] = []
+    used = len(intro)
+    sep = "\n\n---\n\n"
+    for row in chunks[:max_blocks]:
+        if not isinstance(row, dict):
+            continue
+        dest = str(row.get("destination") or "").strip() or "Unknown"
+        head = str(row.get("heading") or "").strip() or "Section"
+        body = str(row.get("content") or "").strip()
+        if not body:
+            continue
+        excerpt = body[:900] + ("…" if len(body) > 900 else "")
+        block = f"[{dest}] {head}\n{excerpt}"
+        gap = len(sep) if blocks else 0
+        if used + gap + len(block) > max_chars:
+            break
+        blocks.append(block)
+        used += gap + len(block)
+    if not blocks:
+        return ""
+    return intro + sep.join(blocks)
 
 
 def _configure_langsmith_env(settings: Settings) -> None:
@@ -488,12 +649,16 @@ class TravelAgentGraph:
         user_query = str(state.get("user_query") or "").strip()
         ext = IntentExtractor(self.settings)
         intent, meta = await ext.extract(user_query)
+        raw_patch = state.get("context_patch")
+        patch = raw_patch if isinstance(raw_patch, dict) and raw_patch else None
+        intent = merge_context_patch_into_intent(intent, patch)
         usage = state.get("usage_parts", []) + [{"step": "intent_extraction", **meta}]
         return {"user_query": user_query, "intent": intent.model_dump(), "usage_parts": usage}
 
     def _route_after_intent(self, state: dict[str, Any]) -> Literal["clarify", "tools"]:
         intent = IntentResult.model_validate(state.get("intent", {}))
-        missing = set(intent.critical_missing()) | set(intent.missing_fields)
+        # Do not OR raw missing_fields — the extractor often leaves stale labels.
+        missing = set(intent.critical_missing())
         critical = {"duration", "budget", "activities", "preferred_month"}
         if critical & missing:
             return "clarify"
@@ -502,12 +667,12 @@ class TravelAgentGraph:
     async def _clarify(self, state: dict[str, Any]) -> dict[str, Any]:
         intent = IntentResult.model_validate(state.get("intent", {}))
         user_query = str(state.get("user_query") or "").strip()
-        miss = list(set(intent.critical_missing()) | set(intent.missing_fields))
+        miss = sorted(set(intent.critical_missing()))
         sys_msg = (
             "You help travelers plan trips. Ask ONE concise clarifying question listing "
             "what you still need (duration in days, total budget USD, main activities)."
         )
-        user_msg = f"Missing fields: {miss}. User said: {user_query}"
+        user_msg = f"Missing fields: {', '.join(miss)}. User said: {user_query}"
         if not self.settings.openai_api_key.strip():
             text = (
                 "To suggest destinations, I need your trip length (days), approximate total "
@@ -570,6 +735,8 @@ class TravelAgentGraph:
             parts = [", ".join(intent.activities or []), intent.destination_hint or ""]
             q = " ".join([p for p in parts if p]).strip() or "travel recommendations"
 
+        rag_query = _compact_rag_query(q, intent)
+
         t0 = time.perf_counter()
         cls_task = classify_destinations(
             self.settings,
@@ -579,7 +746,8 @@ class TravelAgentGraph:
             destination_hint=intent.destination_hint,
             top_k=8,
         )
-        rag_task = rag_search(rag, query=q, destination=intent.destination_hint, top_k=5)
+        rag_dest = _rag_destination_for_search(intent)
+        rag_task = rag_search(rag, query=rag_query, destination=rag_dest, top_k=5)
         fx_task = fx_latest_tool(fx, target_currency="EUR")
 
         cls_env, rag_env, fx_env = await asyncio.gather(cls_task, rag_task, fx_task)
@@ -636,7 +804,14 @@ class TravelAgentGraph:
     async def _synthesize(self, state: dict[str, Any]) -> dict[str, Any]:
         intent = IntentResult.model_validate(state.get("intent", {}))
         user_query = str(state.get("user_query") or "").strip()
-        tools_blob = json.dumps(state.get("tool_results", {}), default=str)[:28000]
+        tool_results = (
+            state.get("tool_results") if isinstance(state.get("tool_results"), dict) else {}
+        )
+        rag_digest = _rag_digest_for_synthesis(tool_results)
+        tools_blob = json.dumps(tool_results, default=str)
+        max_tools = 22000 if rag_digest else 28000
+        if len(tools_blob) > max_tools:
+            tools_blob = tools_blob[:max_tools] + "\n…[tool JSON truncated]"
 
         per_day: float | None = None
         if intent.budget_usd is not None and intent.duration_days and intent.duration_days > 0:
@@ -659,11 +834,12 @@ NUMBERS TO USE EXACTLY IN YOUR PROSE (do not invent different totals):
 - traveler_style: {intent.traveler_style}
 """
 
+        rag_section = f"{rag_digest}\n\n" if rag_digest else ""
         user_blob = f"""{personalization_block}
 Structured intent (JSON):
 {json.dumps(intent.model_dump(), default=str)}
 
-Tool outputs (JSON) — ground your cost and weather claims here:
+{rag_section}Tool outputs (JSON) — ground your cost and weather claims here:
 {tools_blob}
 """
 
@@ -685,9 +861,6 @@ Tool outputs (JSON) — ground your cost and weather claims here:
             temperature=0.55,
         )
         raw_json = completion.choices[0].message.content or "{}"
-        tool_results = (
-            state.get("tool_results") if isinstance(state.get("tool_results"), dict) else {}
-        )
         try:
             structured = json.loads(raw_json)
             month_label = str(
@@ -729,13 +902,23 @@ Tool outputs (JSON) — ground your cost and weather claims here:
 
 
 @traceable(name="run_travel_agent", run_type="chain")
-async def run_travel_agent(settings: Settings, user_query: str) -> dict[str, Any]:
+async def run_travel_agent(
+    settings: Settings,
+    user_query: str,
+    *,
+    context_patch: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Execute compiled graph and return final state."""
     _configure_langsmith_env(settings)
     agent = TravelAgentGraph(settings)
     graph = agent.compile()
     result = await graph.ainvoke(
-        {"user_query": user_query.strip(), "usage_parts": [], "tool_results": {}}
+        {
+            "user_query": user_query.strip(),
+            "usage_parts": [],
+            "tool_results": {},
+            "context_patch": context_patch if context_patch else {},
+        }
     )
     return result
 

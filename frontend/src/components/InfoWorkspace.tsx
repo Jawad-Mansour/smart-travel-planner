@@ -12,9 +12,9 @@ import {
   type StreamAnalysis,
 } from "../lib/analysisFormatter";
 import { apiFetch } from "../api/http";
-import { BookOpen, ChevronDown, Copy, Mail, Radar, Sparkles } from "lucide-react";
+import { Bell, BookOpen, ChevronDown, Copy, Radar, Sparkles } from "lucide-react";
 
-export type InfoView = "chat" | "system-info" | "analysis" | "webhook-setup";
+export type InfoView = "chat" | "system-info" | "analysis";
 
 const DESTINATIONS = [
   "Amsterdam",
@@ -133,7 +133,7 @@ export function InfoWorkspace({
     rag?: { parent_chunks?: number; child_chunks?: number; destination_count?: number };
     ml_classifier?: { destinations_trained?: number; styles?: string[]; test_f1?: number };
   } | null>(null);
-  const [sysTab, setSysTab] = useState<"ml" | "rag" | "apis" | "llm">("ml");
+  const [sysTab, setSysTab] = useState<"ml" | "rag" | "apis" | "llm" | "notify">("ml");
 
   useEffect(() => {
     if (view !== "system-info") return;
@@ -173,6 +173,7 @@ export function InfoWorkspace({
             ["rag", "RAG pipeline"],
             ["apis", "Live APIs"],
             ["llm", "LLM stack"],
+            ["notify", "Optional alerts"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -287,6 +288,50 @@ export function InfoWorkspace({
                 Token savings: roughly <strong>85%</strong> vs always calling the largest model for every hop
               </li>
             </ul>
+          </Card>
+        ) : null}
+
+        {sysTab === "notify" ? (
+          <Card className="space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                <Bell className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="font-semibold text-slate-900">Optional plan digests</h3>
+                <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                  Your full answer always stays in this app (see <strong>History</strong> in the sidebar). Digests are
+                  only if someone configured the server to mirror finished trips elsewhere — handy for teams or when you
+                  want a ping without keeping the tab open.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm text-slate-700">
+              <p className="font-medium text-slate-900">When you get one</p>
+              <p className="mt-1 text-slate-600">
+                Only after a <strong>complete itinerary</strong> — not when the assistant is only asking you for budget,
+                dates, or activities. Failed delivery never removes your reply in chat.
+              </p>
+            </div>
+            <ul className="space-y-3 text-sm text-slate-700">
+              <li className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+                <span className="font-semibold text-slate-900">Discord</span> — a compact card in a channel you choose
+                (title, preview, your account email). Best for demos and friends planning together.
+              </li>
+              <li className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+                <span className="font-semibold text-slate-900">Slack</span> — a short text post to a workspace webhook.
+                Good for work travel threads.
+              </li>
+              <li className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+                <span className="font-semibold text-slate-900">Email (SMTP)</span> — plain text to the address you
+                signed in with. Needs mail settings on the server (host, from-address, optional login/TLS).
+              </li>
+            </ul>
+            <p className="text-xs leading-relaxed text-slate-500">
+              Self-hosting? Add <code className="rounded bg-slate-100 px-1">DISCORD_WEBHOOK_URL</code>,{" "}
+              <code className="rounded bg-slate-100 px-1">SLACK_WEBHOOK_URL</code>, and/or{" "}
+              <code className="rounded bg-slate-100 px-1">SMTP_*</code> in <code className="rounded bg-slate-100 px-1">.env</code>, restart the API, then send one full trip request to verify. See the repo README for variable names.
+            </p>
           </Card>
         ) : null}
 
@@ -463,8 +508,11 @@ export function InfoWorkspace({
             </Accordion>
 
             <Card>
-              <h3 className="font-semibold text-slate-900">Webhook</h3>
-              <p className="mt-1">{webhookLabel(analysis.webhook_status)}</p>
+              <h3 className="font-semibold text-slate-900">Optional digest</h3>
+              <p className="mt-1 text-slate-600">{webhookLabel(analysis.webhook_status)}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                This reflects the last completed plan only. For what digests are, open How it works → Optional alerts.
+              </p>
             </Card>
           </>
         )}
@@ -472,79 +520,5 @@ export function InfoWorkspace({
     );
   }
 
-  /* webhook-setup */
-  return (
-    <PanelShell title="Webhook delivery" icon={<Mail className="h-5 w-5" />}>
-      <Card className="space-y-4 leading-relaxed">
-        <h2 className="text-base font-semibold text-slate-900">What is the webhook?</h2>
-        <p>
-          After the agent finishes planning your trip, it can notify you in the background: Discord, Slack, and/or an
-          email to the account you signed in with (when SMTP is configured). Delivery does not block the chat.
-        </p>
-
-        <h3 className="text-sm font-semibold text-slate-900">How to set it up (three steps)</h3>
-
-        <h4 className="text-sm font-semibold text-slate-900">1. Discord (easiest)</h4>
-        <ul className="list-disc pl-5">
-          <li>In your Discord server: Server Settings → Integrations → Webhooks → New Webhook</li>
-          <li>Name it &quot;Travel Planner&quot;, pick a channel</li>
-          <li>Copy the webhook URL</li>
-          <li>
-            Add to your <code className="rounded bg-slate-100 px-1">.env</code>:{" "}
-            <code className="rounded bg-slate-100 px-1">DISCORD_WEBHOOK_URL=your_url_here</code>
-          </li>
-          <li>Restart the API</li>
-        </ul>
-        <p>
-          <strong>What you&apos;ll receive:</strong> each plan as a rich embed with title, preview text, and user
-          metadata.
-        </p>
-
-        <h4 className="text-sm font-semibold text-slate-900">2. Slack</h4>
-        <ul className="list-disc pl-5">
-          <li>Create an incoming webhook from your Slack workspace apps catalog</li>
-          <li>
-            Add <code className="rounded bg-slate-100 px-1">SLACK_WEBHOOK_URL</code> to <code className="rounded bg-slate-100 px-1">.env</code>
-          </li>
-          <li>Restart the API — summaries post as plain text payloads</li>
-        </ul>
-
-        <h4 className="text-sm font-semibold text-slate-900">3. Email (SMTP)</h4>
-        <p>
-          When the server has SMTP settings, the API sends a plain-text email to the signed-in user&apos;s address after
-          each completed itinerary (same moment as Discord/Slack hooks).
-        </p>
-        <ul className="list-disc pl-5">
-          <li>
-            Set <code className="rounded bg-slate-100 px-1">SMTP_HOST</code>,{" "}
-            <code className="rounded bg-slate-100 px-1">SMTP_FROM</code>, and usually{" "}
-            <code className="rounded bg-slate-100 px-1">SMTP_PORT</code> (587 with STARTTLS, or 465 with{" "}
-            <code className="rounded bg-slate-100 px-1">SMTP_USE_SSL=true</code>)
-          </li>
-          <li>
-            If your provider requires auth: <code className="rounded bg-slate-100 px-1">SMTP_USER</code> and{" "}
-            <code className="rounded bg-slate-100 px-1">SMTP_PASSWORD</code>
-          </li>
-          <li>
-            Local dev without TLS: <code className="rounded bg-slate-100 px-1">SMTP_USE_TLS=false</code> (e.g. Mailpit)
-          </li>
-        </ul>
-
-        <h3 className="text-sm font-semibold text-slate-900">Testing</h3>
-        <p>
-          After setup, send a complete trip query (not a clarification turn). Notifications run automatically after the
-          final assistant message. Check Discord, Slack, and/or the user&apos;s inbox.
-        </p>
-
-        <h3 className="text-sm font-semibold text-slate-900">Troubleshooting</h3>
-        <ul className="list-disc pl-5">
-          <li>Verify URLs and outbound connectivity from the API container</li>
-          <li>Chat continues even if the webhook fails — errors are logged</li>
-          <li>
-            Inspect logs with <code className="rounded bg-slate-100 px-1">docker logs backend</code>
-          </li>
-        </ul>
-      </Card>
-    </PanelShell>
-  );
+  return null;
 }

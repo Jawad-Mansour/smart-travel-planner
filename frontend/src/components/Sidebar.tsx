@@ -1,15 +1,14 @@
 import {
   ChevronRight,
+  History,
   LayoutGrid,
   LogOut,
-  Mail,
   MessageCirclePlus,
   PanelLeftClose,
   PanelLeftOpen,
   Radar,
   RefreshCw,
   Sparkles,
-  Trash2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -17,32 +16,17 @@ import type { Session } from "../api/sessions";
 import type { User } from "../context/AuthContext";
 import { apiFetch } from "../api/http";
 import { AppLogo } from "./AppLogo";
+import { ChatHistoryModal } from "./ChatHistoryModal";
 import type { InfoView } from "./InfoWorkspace";
-
-function timeAgo(iso: string | null): string {
-  if (!iso) return "";
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return "";
-  const s = Math.floor((Date.now() - t) / 1000);
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
-
-function title30(t: string): string {
-  const s = t.trim() || "Trip";
-  return s.length <= 30 ? s : `${s.slice(0, 27)}…`;
-}
 
 const NAV: { id: Exclude<InfoView, "chat">; label: string; icon: typeof Sparkles }[] = [
   { id: "system-info", label: "How it works & data", icon: Sparkles },
   { id: "analysis", label: "Response analysis", icon: Radar },
-  { id: "webhook-setup", label: "Webhook setup", icon: Mail },
 ];
 
 export function Sidebar({
   sessions,
+  sessionsLoading = false,
   activeId,
   mainView,
   mobileOpen,
@@ -56,6 +40,8 @@ export function Sidebar({
   logout,
 }: {
   sessions: Session[];
+  /** True while the initial session list is loading (shows subtle placeholders). */
+  sessionsLoading?: boolean;
   activeId: string | null;
   mainView: InfoView;
   mobileOpen: boolean;
@@ -72,6 +58,7 @@ export function Sidebar({
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const [healthMs, setHealthMs] = useState<number | null>(null);
   const [healthOpen, setHealthOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("stp_sidebar_collapsed", collapsed ? "1" : "0");
@@ -98,6 +85,7 @@ export function Sidebar({
   const narrow = collapsed;
 
   return (
+    <>
     <aside
       className={`fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col border-r border-slate-200/90 bg-white shadow-[4px_0_24px_rgba(15,23,42,0.04)] transition-[width,transform] duration-200 ease-out lg:static lg:z-0 ${
         mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
@@ -138,7 +126,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <div className={narrow ? "px-1.5 pt-2" : "px-3 pt-3"}>
+      <div className={`${narrow ? "px-1.5 pt-2" : "px-3 pt-3"}`}>
         <button
           type="button"
           onClick={() => {
@@ -194,65 +182,32 @@ export function Sidebar({
         ))}
       </nav>
 
+      <div className={`mt-2 ${narrow ? "px-1.5" : "px-3"}`}>
+        <button
+          type="button"
+          onClick={() => {
+            setHistoryOpen(true);
+            onMobileOpenChange(false);
+          }}
+          className={`flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-sm font-semibold text-white shadow-md ring-1 ring-white/20 transition hover:brightness-105 active:scale-[0.99] ${narrow ? "px-0" : ""}`}
+          title="All saved trips"
+        >
+          <History className="h-4 w-4 shrink-0" />
+          {!narrow ? <span>All trips</span> : null}
+        </button>
+      </div>
+
       <div className={`my-3 h-px bg-slate-100 ${narrow ? "mx-2" : "mx-3"}`} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
         {!narrow ? (
-          <div className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Recent trips
-          </div>
-        ) : null}
-        <ul className={`space-y-0.5 ${narrow ? "px-1" : "px-2"}`}>
-          {sessions.map((s) => (
-            <li key={s.id} className="group relative">
-              <button
-                type="button"
-                onClick={() => {
-                  onSelect(s.id);
-                  onNavigate("chat");
-                  onMobileOpenChange(false);
-                }}
-                title={s.title}
-                className={`flex w-full flex-col rounded-xl py-2 text-left transition ${
-                  narrow ? "items-center px-0" : "px-3 pr-10"
-                } ${
-                  s.id === activeId && mainView === "chat"
-                    ? "bg-slate-50 font-medium text-slate-900 ring-1 ring-slate-200/80"
-                    : "text-slate-700 hover:bg-slate-50/90"
-                }`}
-              >
-                {!narrow ? (
-                  <>
-                    <span className="truncate text-sm">{title30(s.title)}</span>
-                    {s.updated_at ? (
-                      <span className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-400">
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
-                        {timeAgo(s.updated_at)}
-                      </span>
-                    ) : null}
-                  </>
-                ) : (
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-bold text-slate-600">
-                    {(s.title || "?").slice(0, 1).toUpperCase()}
-                  </span>
-                )}
-              </button>
-              {!narrow ? (
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                  aria-label="Delete chat"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteSession(s.id);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+          <p className="text-center text-[11px] leading-relaxed text-slate-500">
+            Chat titles come from your <strong className="text-slate-800">first message</strong>. Use{" "}
+            <strong className="text-slate-800">All trips</strong> to search and open any conversation.
+          </p>
+        ) : (
+          <p className="px-0.5 text-center text-[10px] leading-snug text-slate-500">All trips · saved by first line</p>
+        )}
       </div>
 
       <div className={`mt-auto border-t border-slate-100 bg-slate-50/80 ${narrow ? "px-1 py-2" : "px-3 py-3"}`}>
@@ -299,7 +254,7 @@ export function Sidebar({
           <div className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 shadow-sm">
             <p>
               <strong className="text-slate-800">Health</strong> — pings <code className="rounded bg-slate-100 px-1">/health</code>{" "}
-              every minute. Webhooks run async; failures are logged server-side.
+              every minute. Optional plan digests run in the background; failures are logged server-side.
             </p>
           </div>
         ) : null}
@@ -345,5 +300,19 @@ export function Sidebar({
         )}
       </div>
     </aside>
+    <ChatHistoryModal
+      open={historyOpen}
+      onClose={() => setHistoryOpen(false)}
+      sessions={sessions}
+      sessionsLoading={sessionsLoading}
+      activeId={activeId}
+      onPickSession={(id) => {
+        onSelect(id);
+        onNavigate("chat");
+        onMobileOpenChange(false);
+      }}
+      onDeleteSession={onDeleteSession}
+    />
+    </>
   );
 }

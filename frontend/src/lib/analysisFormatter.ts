@@ -199,9 +199,9 @@ export function extractFlightLines(tool_results: Record<string, unknown>): strin
 export function webhookLabel(status: string | undefined): string {
   switch (status) {
     case "queued":
-      return "Queued (Discord, Slack, and/or email after reply)";
+      return "Digest queued — Discord, Slack, or email (if configured)";
     case "not_configured":
-      return "Not configured";
+      return "No digest channels on this server (your reply is still saved)";
     case "not_sent":
       return "Not sent (clarification or empty reply)";
     case "skipped_clarification":

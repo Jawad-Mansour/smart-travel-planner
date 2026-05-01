@@ -78,7 +78,6 @@ class ChatMessage(Base):
 
     session: Mapped["ChatSession"] = relationship(back_populates="messages")
     tool_logs: Mapped[list["ToolCallLog"]] = relationship(back_populates="message")
-    tool_logs: Mapped[list["ToolCallLog"]] = relationship(back_populates="message")
 
 
 class ToolCallLog(Base):

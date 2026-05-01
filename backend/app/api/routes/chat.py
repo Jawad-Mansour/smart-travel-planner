@@ -13,6 +13,7 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.chat_markdown_split import split_travel_answer_segments
@@ -32,8 +33,6 @@ from backend.app.services.webhook_service import (
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 _log = structlog.get_logger(__name__)
-
-SEGMENT_PAUSE_SEC = 0.35
 
 
 def _compose_query(message: str, patch: dict[str, Any] | None) -> str:
@@ -57,6 +56,32 @@ def _compose_query(message: str, patch: dict[str, Any] | None) -> str:
 
 def _sse(obj: dict[str, Any]) -> str:
     return "data: " + json.dumps(obj, default=str) + "\n\n"
+
+
+async def _prior_thread_for_prompt(
+    db: AsyncSession, session_id: Any, exclude_message_id: Any
+) -> str:
+    """Compact prior turns (same session) so follow-up questions keep context."""
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id, ChatMessage.id != exclude_message_id)
+        .order_by(ChatMessage.created_at.asc())
+        .limit(30)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    if not rows:
+        return ""
+    lines: list[str] = []
+    for row in rows:
+        who = "User" if row.role == "user" else "Assistant"
+        text = (row.content or "").strip()
+        if not text:
+            continue
+        cap = 3200 if row.role == "assistant" else 1200
+        if len(text) > cap:
+            text = text[: cap - 1] + "…"
+        lines.append(f"{who}: {text}")
+    return "\n".join(lines)
 
 
 def _chunks(text: str, size: int = 18) -> list[str]:
@@ -113,8 +138,6 @@ async def chat_stream(
     user: Annotated[User, Depends(get_current_user)],
     settings: Annotated[Settings, Depends(settings_dep)],
 ) -> StreamingResponse:
-    query = _compose_query(body.message, body.context_patch)
-
     async def event_gen() -> AsyncIterator[str]:
         try:
             session_row: ChatSession | None = None
@@ -141,8 +164,19 @@ async def chat_stream(
 
             yield _sse({"type": "session", "session_id": str(session_row.id)})
 
+            base_query = _compose_query(body.message, body.context_patch)
+            prior = await _prior_thread_for_prompt(db, session_row.id, user_msg.id)
+            if prior:
+                agent_input = (
+                    "Earlier messages in this chat (same trip). Use for continuity only; "
+                    "answer the latest traveler message.\n\n"
+                    f"{prior}\n\n---\nLatest:\n{base_query}"
+                )
+            else:
+                agent_input = base_query
+
             t_agent = time.perf_counter()
-            result = await run_travel_agent(settings, query)
+            result = await run_travel_agent(settings, agent_input, context_patch=body.context_patch)
             elapsed_agent = round(time.perf_counter() - t_agent, 2)
             answer = str(result.get("answer") or "")
             raw_intent = result.get("intent")
@@ -154,7 +188,8 @@ async def chat_stream(
                 )
             except ValidationError:
                 intent_obj = IntentResult()
-            missing = sorted(set(intent_obj.critical_missing()) | set(intent_obj.missing_fields))
+            # Stale extractor missing_fields must not re-trigger the same questions.
+            missing = sorted(set(intent_obj.critical_missing()))
             is_clarification = bool(result.get("clarification"))
             needs_clarification = bool(missing) and is_clarification
 
@@ -177,9 +212,10 @@ async def chat_stream(
                 seg_list = split_travel_answer_segments(answer)
 
             if seg_list and len(seg_list) >= 2:
+                pause = float(settings.chat_segment_pause_seconds)
                 for i, seg in enumerate(seg_list):
                     if i:
-                        await asyncio.sleep(SEGMENT_PAUSE_SEC)
+                        await asyncio.sleep(pause)
                     yield _sse({"type": "segment", "content": seg})
             else:
                 for part in _chunks(answer):

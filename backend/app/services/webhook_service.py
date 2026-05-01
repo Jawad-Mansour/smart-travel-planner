@@ -17,8 +17,13 @@ from backend.app.core.config import Settings
 logger = structlog.get_logger(__name__)
 
 
+def smtp_plan_email_configured(host: str, from_addr: str) -> bool:
+    """True when SMTP host and From address are both set (used for tests without full Settings)."""
+    return bool((host or "").strip() and (from_addr or "").strip())
+
+
 def plan_ready_email_configured(settings: Settings) -> bool:
-    return bool((settings.smtp_host or "").strip() and (settings.smtp_from or "").strip())
+    return smtp_plan_email_configured(settings.smtp_host, settings.smtp_from)
 
 
 async def notify_slack_plan_ready(
@@ -129,7 +134,12 @@ async def notify_email_plan_ready(
     session_title: str,
     answer_preview: str,
 ) -> None:
-    if not plan_ready_email_configured(settings):
+    if not smtp_plan_email_configured(settings.smtp_host, settings.smtp_from):
+        logger.debug(
+            "webhook.email_skipped",
+            reason="smtp_host_or_from_missing",
+            hint="Set SMTP_HOST and SMTP_FROM in .env to receive plan emails.",
+        )
         return
     host = (settings.smtp_host or "").strip()
     from_addr = (settings.smtp_from or "").strip()
@@ -137,6 +147,11 @@ async def notify_email_plan_ready(
     if not to_addr:
         return
 
+    logger.info(
+        "webhook.email_sending",
+        to=to_addr,
+        session_title=session_title[:120],
+    )
     preview = (answer_preview or "").strip()
     subject = f"Your travel plan is ready — {session_title}"
     body = (
@@ -147,18 +162,24 @@ async def notify_email_plan_ready(
     )
 
     try:
-        await asyncio.to_thread(
-            _send_plan_ready_email_sync,
-            host=host,
-            port=int(settings.smtp_port),
-            user=(settings.smtp_user or "").strip(),
-            password=(settings.smtp_password or "").strip(),
-            from_addr=from_addr,
-            to_addr=to_addr,
-            subject=subject,
-            body=body[:20000],
-            use_tls=settings.smtp_use_tls and not settings.smtp_use_ssl,
-            use_ssl=settings.smtp_use_ssl,
+        await asyncio.wait_for(
+            asyncio.to_thread(
+                _send_plan_ready_email_sync,
+                host=host,
+                port=int(settings.smtp_port),
+                user=(settings.smtp_user or "").strip(),
+                password=(settings.smtp_password or "").strip(),
+                from_addr=from_addr,
+                to_addr=to_addr,
+                subject=subject,
+                body=body[:20000],
+                use_tls=settings.smtp_use_tls and not settings.smtp_use_ssl,
+                use_ssl=settings.smtp_use_ssl,
+            ),
+            timeout=45.0,
         )
+        logger.info("webhook.email_sent", to=to_addr)
+    except TimeoutError:
+        logger.warning("webhook.email_timeout", to=to_addr)
     except Exception as exc:
         logger.warning("webhook.email_failed", error=str(exc), to=to_addr)

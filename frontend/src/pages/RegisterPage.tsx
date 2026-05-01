@@ -1,4 +1,3 @@
-import { Github } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -69,15 +68,19 @@ export function RegisterPage() {
             <img src="/plane.svg" alt="" className="glowing-logo h-14 w-14 rounded-2xl object-contain" />
           </div>
           <h1 className="text-center text-2xl font-bold text-slate-900">Create account</h1>
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <button type="button" disabled className="btn-social" title="Coming soon">
+          <div className="mt-6">
+            <button
+              type="button"
+              disabled
+              className="btn-social flex w-full cursor-not-allowed items-center justify-center gap-2 py-3"
+              title="Google sign-in is not enabled yet"
+            >
               <GoogleMark />
-              Google
+              Continue with Google (coming soon)
             </button>
-            <button type="button" disabled className="btn-social" title="Coming soon">
-              <Github className="h-4 w-4" />
-              GitHub
-            </button>
+            <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-500">
+              OAuth is not connected yet — register with email and password below.
+            </p>
           </div>
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
